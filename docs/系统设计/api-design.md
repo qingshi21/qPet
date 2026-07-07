@@ -176,7 +176,7 @@ GET /api/pets
 ### 2.3 切换当前宠物
 
 ```
-PUT /api/pets/{petId}/activate
+PATCH /api/pets/{petId}/activate
 ```
 
 | 参数 | 位置 | 类型 | 必填 | 说明 |
@@ -221,7 +221,7 @@ DELETE /api/pets/{petId}
 ### 2.5 更新宠物信息
 
 ```
-PUT /api/pets/{petId}
+PATCH /api/pets/{petId}
 ```
 
 | 参数 | 位置 | 类型 | 必填 | 说明 |
@@ -484,9 +484,9 @@ POST /api/role/understand
 | POST | /api/auth/login | 登录 | users, pets |
 | POST | /api/pets | 创建宠物 | pets |
 | GET | /api/pets | 获取宠物列表 | pets |
-| PUT | /api/pets/{petId}/activate | 切换宠物 | pets |
+| PATCH | /api/pets/{petId}/activate | 切换宠物 | pets |
 | DELETE | /api/pets/{petId} | 删除宠物 | pets |
-| PUT | /api/pets/{petId} | 更新宠物 | pets |
+| PATCH | /api/pets/{petId} | 更新宠物 | pets |
 | POST | /api/chat/send | 发送消息 | pets, chat_messages, pet_memories |
 | GET | /api/chat/history | 获取对话历史 | chat_messages |
 | GET | /api/memories | 获取所有记忆 | pet_memories |
