@@ -1,11 +1,11 @@
 # 前端
-qpet-frontend/node_modules/
-qpet-frontend/dist/
-qpet-frontend/.env
+lumenami-frontend/node_modules/
+lumenami-frontend/dist/
+lumenami-frontend/.env
 
 # 后端
-qpet-backend/target/
-qpet-backend/*.log
+lumenami-backend/target/
+lumenami-backend/*.log
 
 # IDE
 .idea/

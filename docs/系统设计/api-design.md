@@ -1,5 +1,5 @@
 ```markdown
-# qPet API 设计文档
+# LumenAmi API 设计文档
 
 **版本**：v1.0
 **基础路径**：`/api`

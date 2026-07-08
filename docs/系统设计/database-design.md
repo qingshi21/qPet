@@ -1,6 +1,6 @@
-# qPet 数据库设计文档
+# LumenAmi 数据库设计文档
 
-**数据库名**：`qpet_db`
+**数据库名**：`lumenami_db`
 **数据库版本**：MySQL 8.0
 **字符集**：utf8mb4
 **存储引擎**：InnoDB

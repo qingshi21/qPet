@@ -8,7 +8,7 @@
 
 ### 后端（Spring Boot）
 
-- [x] Spring Boot 项目初始化（`qpet-backend`）
+- [x] Spring Boot 项目初始化（`LumenAmi-backend`）
 - [x] 确认 Spring Boot 版本：3.5.16
 - [x] 添加核心依赖：
   - Spring Web
@@ -18,14 +18,14 @@
   - Lombok
   - DevTools
 - [x] 数据库连接配置（`application.properties`）
-- [x] MySQL 8.0 本地环境验证（`qpet_db` 已创建，四张表已建好）
+- [x] MySQL 8.0 本地环境验证（`lumenami_db` 已创建，四张表已建好）
 - [x] 验证启动：`BackendApplication` 正常启动，控制台显示 `Started ... in 1.99 seconds`
 - [x] 编写测试接口：`GET /api/health` 返回 JSON，证明 Web 层工作正常
 
 
 ### 前端（Electron）
 
-- [x] Electron 项目初始化（`qpet-frontend`）
+- [x] Electron 项目初始化（`LumenAmi-frontend`）
 - [x] 安装 Electron 依赖（版本：35.1.5）
 - [x] 编写 `main.js`（主进程：创建透明置顶悬浮窗）
 - [x] 编写 `index.html`（渲染进程：桌宠界面 + 点击交互 + 关闭按钮）
@@ -35,18 +35,18 @@
 ## 关键决策记录
 
 - Spring Boot 版本锁定为 3.5.16（MyBatis 3.0.5 兼容）
-- 数据库名：`qpet_db`
+- 数据库名：`lumenami_db`
 - 前端使用 Electron + 原生 JS（暂不引入前端框架）
 - 前后端分离开发，通过 REST API 通信
 
 
 ## 当前可运行状态
 
-| 模块 | 状态 | 验证方式 |
-|---|---|---|
+| 模块             | 状态   | 验证方式                                          |
+|----------------|------|-----------------------------------------------|
 | Spring Boot 后端 | ✅ 正常 | 访问 `http://localhost:8080/api/health` 返回 JSON |
-| MySQL | ✅ 正常 | `qpet_db` 已连接，四张表存在 |
-| Electron 前端 | ✅ 正常 | `npm start` 显示悬浮窗 |
+| MySQL          | ✅ 正常 | `lumenami_db` 已连接，四张表存在                       |
+| Electron 前端    | ✅ 正常 | `npm start` 显示悬浮窗                             |
 
 ## 明天计划（Day 2）
 
