@@ -1,9 +1,19 @@
+// ===== Electron IPC =====
+const { ipcRenderer } = require('electron');
+
+// ===== 从悬浮窗返回时自动显示宠物列表 =====
+ipcRenderer.on('auto-show-pet-list', () => {
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+        currentUserId = parseInt(userId);
+        showPetList();
+    }
+});
+
 // ===== 窗口控制 =====
 const closeBtn = document.getElementById('closeBtn');
 const minimizeBtn = document.getElementById('minimizeBtn');
 
-// 使用 Electron 的 IPC 通信关闭窗口
-// 注意：这需要在主进程中监听，但目前我们先简单用 window.close()
 if (closeBtn) {
     closeBtn.addEventListener('click', () => {
         window.close();
@@ -12,39 +22,34 @@ if (closeBtn) {
 
 if (minimizeBtn) {
     minimizeBtn.addEventListener('click', () => {
-        // Electron 没有直接的最小化 API，需要通过 IPC
-        // 暂时留空，后续实现
-        alert('最小化功能开发中...');
+        ipcRenderer.send('minimize-launcher');
     });
 }
 
-// ===== 错误提示管理 =====
-function showError(elementId, message) {
+// ===== 消息提示管理（支持错误和成功两种颜色） =====
+function showMessage(elementId, message, isSuccess = false) {
     const el = document.getElementById(elementId);
     if (!el) return;
 
-    // 清除之前的定时器
     if (el._timeout) {
         clearTimeout(el._timeout);
         clearTimeout(el._fadeTimeout);
     }
 
-    // 显示错误信息
     el.textContent = message;
+    el.style.color = isSuccess ? '#27ae60' : '#e74c3c';
     el.classList.remove('fade-out');
     el.style.opacity = '1';
 
-    // 5秒后开始淡出
     el._timeout = setTimeout(() => {
         el.classList.add('fade-out');
 
-        // 淡出动画完成后清空文字
         el._fadeTimeout = setTimeout(() => {
             el.textContent = '';
             el.classList.remove('fade-out');
             el.style.opacity = '1';
         }, 500);
-    }, 5000);
+    }, 10000);
 }
 
 function clearError(elementId) {
@@ -73,11 +78,13 @@ tabs.forEach(tab => {
         if (tab.dataset.tab === 'login') {
             loginForm.style.display = 'flex';
             registerForm.style.display = 'none';
-            clearError('regError');   // ← 清空注册错误
+            clearError('regError');
+            document.getElementById('loginPassword').disabled = false;
         } else {
             loginForm.style.display = 'none';
             registerForm.style.display = 'flex';
-            clearError('loginError');  // ← 清空登录错误
+            clearError('loginError');
+            document.getElementById('regPassword').disabled = false;
         }
     });
 });
@@ -87,10 +94,9 @@ loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
-    const errorEl = document.getElementById('loginError');
 
     if (!username || !password) {
-        errorEl.textContent = '请填写完整信息';
+        showMessage('loginError', '请填写完整信息');
         return;
     }
 
@@ -106,14 +112,19 @@ loginForm.addEventListener('submit', async (e) => {
         const result = await response.json();
 
         if (result.code === 200) {
-            // 登录成功
-            console.log('登录成功', result.data);
-            alert('登录成功！欢迎回来 🎉');
-        } else {
-            showError('loginError', result.message || '登录失败');
+            currentUserId = result.data.userId;
+            localStorage.setItem('userId', currentUserId);
+            localStorage.setItem('username', result.data.username);
+
+            showMessage('loginError', '✅ 登录成功！', true);
+            // 延迟一点切换到宠物列表
+            setTimeout(() => {
+                showPetList();
+            }, 300);
         }
+        
     } catch (err) {
-        errorEl.textContent = '网络错误，请确认后端服务已启动';
+        showMessage('loginError', '网络错误，请确认后端服务已启动');
         console.error(err);
     }
 });
@@ -123,14 +134,13 @@ registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('regUsername').value;
     const password = document.getElementById('regPassword').value;
-    const errorEl = document.getElementById('regError');
 
     if (!username || !password) {
-        errorEl.textContent = '请填写完整信息';
+        showMessage('regError', '请填写完整信息');
         return;
     }
     if (password.length < 6) {
-        errorEl.textContent = '密码至少6位';
+        showMessage('regError', '密码至少6位');
         return;
     }
 
@@ -146,14 +156,267 @@ registerForm.addEventListener('submit', async (e) => {
         const result = await response.json();
 
         if (result.code === 200) {
-            alert('注册成功，请登录');
             document.querySelector('.tab[data-tab="login"]').click();
-            document.getElementById('loginUsername').value = username;
+
+            const usernameInput = document.getElementById('loginUsername');
+            usernameInput.value = username;
+            usernameInput.disabled = false;
+
+            const pwdInput = document.getElementById('loginPassword');
+            pwdInput.value = '';
+            pwdInput.disabled = false;
+
+            document.querySelector('#loginForm button').disabled = false;
+
+            showMessage('loginError', '✅ 注册成功，请登录', true);
         } else {
-            showError('regError', result.message || '注册失败');
+            showMessage('regError', result.message || '注册失败');
         }
     } catch (err) {
-        errorEl.textContent = '网络错误，请确认后端服务已启动';
+        showMessage('regError', '网络错误，请确认后端服务已启动');
         console.error(err);
     }
 });
+
+// ===== 通用请求头 =====
+function apiHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'X-User-Id': String(localStorage.getItem('userId') || '')
+    };
+}
+
+// ===== 宠物列表相关 =====
+const petListContainer = document.getElementById('petListContainer');
+const petListEl = document.getElementById('petList');
+const createPetBtn = document.getElementById('createPetBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+
+let currentUserId = null;
+let pets = [];
+
+// 宠物头像 emoji 池
+const petEmojis = ['🐱', '🐶', '🐰', '🦊', '🐼', '🐨', '🦄', '🐲', '🐧', '🦋'];
+function getPetEmoji(petId) {
+    return petEmojis[petId % petEmojis.length];
+}
+
+// 获取宠物列表
+async function fetchPets() {
+    try {
+        const response = await fetch('http://localhost:8080/api/pets', {
+            headers: apiHeaders()
+        });
+        const result = await response.json();
+        if (result.code === 200) {
+            pets = result.data || [];
+            renderPetList();
+        } else {
+            showMessage('loginError', '获取宠物列表失败');
+        }
+    } catch (err) {
+        showMessage('loginError', '网络错误');
+        console.error(err);
+    }
+}
+
+// 渲染宠物列表
+function renderPetList() {
+    if (!petListEl) return;
+    if (pets.length === 0) {
+        petListEl.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">✨</div>
+                <div>还没有桌宠，点击右上角创建吧</div>
+            </div>`;
+        return;
+    }
+    petListEl.innerHTML = pets.map(pet => `
+        <div class="pet-card ${pet.isActive ? 'active' : ''}" data-pet-id="${pet.petId}">
+            <div class="pet-avatar-icon">${getPetEmoji(pet.petId)}</div>
+            <div class="info">
+                <span class="name">${pet.name}</span>
+                <span class="role">${pet.roleName || '未设定角色'}</span>
+            </div>
+            <div class="card-actions">
+                ${pet.isActive ? '<span class="status">使用中</span>' : ''}
+                <button class="btn-delete" data-pet-id="${pet.petId}" title="删除">✕</button>
+            </div>
+        </div>
+    `).join('');
+
+    // 绑定点击事件：选择宠物
+    document.querySelectorAll('.pet-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            // 点击删除按钮不触发选择
+            if (e.target.classList.contains('btn-delete')) return;
+            const petId = parseInt(card.dataset.petId);
+            selectPet(petId);
+        });
+    });
+
+    // 绑定删除按钮
+    document.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const petId = parseInt(btn.dataset.petId);
+            const pet = pets.find(p => p.petId === petId);
+            if (pet && confirm(`确定要删除「${pet.name}」吗？`)) {
+                deletePet(petId);
+            }
+        });
+    });
+}
+
+// 选择宠物（切换激活）
+async function selectPet(petId) {
+    try {
+        const response = await fetch(`http://localhost:8080/api/pets/${petId}/activate`, {
+            method: 'PATCH',
+            headers: apiHeaders()
+        });
+        const result = await response.json();
+        if (result.code === 200) {
+            showMessage('loginError', '✅ 已切换到 ' + result.data.name, true);
+            await fetchPets();
+            // 通知主进程关闭启动器、打开悬浮窗
+            ipcRenderer.send('open-floating');
+            ipcRenderer.send('close-launcher');
+        } else {
+            showMessage('loginError', result.message || '切换失败');
+        }
+    } catch (err) {
+        showMessage('loginError', '网络错误');
+        console.error(err);
+    }
+}
+
+// 删除宠物
+async function deletePet(petId) {
+    try {
+        const response = await fetch(`http://localhost:8080/api/pets/${petId}`, {
+            method: 'DELETE',
+            headers: apiHeaders()
+        });
+        const result = await response.json();
+        if (result.code === 200) {
+            showMessage('loginError', '已删除', true);
+            await fetchPets();
+        } else {
+            showMessage('loginError', result.message || '删除失败');
+        }
+    } catch (err) {
+        showMessage('loginError', '网络错误');
+        console.error(err);
+    }
+}
+
+// 显示宠物列表（隐藏登录/注册表单）
+function showPetList() {
+    const authPanel = document.querySelector('.auth-panel');
+    const petDisplay = document.querySelector('.pet-display');
+
+    if (authPanel) authPanel.style.display = 'none';
+    if (petDisplay) petDisplay.style.display = 'none';
+    if (petListContainer) {
+        petListContainer.style.display = '';
+        petListContainer.classList.add('visible');
+        fetchPets();
+    }
+}
+
+// 显示登录/注册表单（隐藏宠物列表）
+function showAuthPanel() {
+    const authPanel = document.querySelector('.auth-panel');
+    const petDisplay = document.querySelector('.pet-display');
+    if (authPanel) authPanel.style.display = '';
+    if (petDisplay) petDisplay.style.display = '';
+    petListContainer.classList.remove('visible');
+    petListContainer.style.display = 'none';
+}
+
+// ===== 退出登录 =====
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+        localStorage.clear();
+        showAuthPanel();
+        showMessage('loginError', '已退出登录');
+    });
+}
+
+// ===== 创建宠物模态框 =====
+const createPetModal = document.getElementById('createPetModal');
+const createPetForm = document.getElementById('createPetForm');
+const modalCloseBtn = document.getElementById('modalCloseBtn');
+const modalCancelBtn = document.getElementById('modalCancelBtn');
+
+function openCreateModal() {
+    createPetForm.reset();
+    clearError('createPetError');
+    createPetModal.style.display = 'flex';
+    // 触发 reflow 后再加 show class，让过渡动画生效
+    requestAnimationFrame(() => {
+        createPetModal.classList.add('show');
+    });
+}
+
+function closeCreateModal() {
+    createPetModal.classList.remove('show');
+    setTimeout(() => {
+        createPetModal.style.display = 'none';
+    }, 250);
+}
+
+if (createPetBtn) {
+    createPetBtn.addEventListener('click', openCreateModal);
+}
+if (modalCloseBtn) {
+    modalCloseBtn.addEventListener('click', closeCreateModal);
+}
+if (modalCancelBtn) {
+    modalCancelBtn.addEventListener('click', closeCreateModal);
+}
+// 点击遮罩关闭
+if (createPetModal) {
+    createPetModal.addEventListener('click', (e) => {
+        if (e.target === createPetModal) closeCreateModal();
+    });
+}
+
+// 提交创建表单
+if (createPetForm) {
+    createPetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('petNameInput').value.trim();
+        const roleName = document.getElementById('petRoleInput').value.trim();
+        const systemPrompt = document.getElementById('petPromptInput').value.trim();
+
+        if (!name) {
+            showMessage('createPetError', '请输入宠物名称');
+            return;
+        }
+        if (!systemPrompt) {
+            showMessage('createPetError', '请输入性格描述');
+            return;
+        }
+
+        try {
+            const response = await fetch('http://localhost:8080/api/pets', {
+                method: 'POST',
+                headers: apiHeaders(),
+                body: JSON.stringify({ name, roleName, systemPrompt })
+            });
+            const result = await response.json();
+            if (result.code === 200) {
+                showMessage('loginError', '✅ 桌宠创建成功！', true);
+                closeCreateModal();
+                await fetchPets();
+            } else {
+                showMessage('createPetError', result.message || '创建失败');
+            }
+        } catch (err) {
+            showMessage('createPetError', '网络错误');
+            console.error(err);
+        }
+    });
+}

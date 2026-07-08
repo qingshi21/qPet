@@ -12,6 +12,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 public class PetControllerTest extends BaseTest {
 
+    private static final String USER_ID_HEADER = "X-User-Id";
+    private static final String TEST_USER_ID = "1";
+
     /**
      * 测试正常创建宠物
      * 预期：返回 200，宠物名称与请求一致
@@ -23,6 +26,7 @@ public class PetControllerTest extends BaseTest {
         request.setSystemPrompt("这是一个测试宠物");
 
         mockMvc.perform(post("/api/pets")
+                        .header(USER_ID_HEADER, TEST_USER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -42,12 +46,14 @@ public class PetControllerTest extends BaseTest {
 
         // 第一次创建：成功
         mockMvc.perform(post("/api/pets")
+                        .header(USER_ID_HEADER, TEST_USER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
         // 第二次创建同名：应失败
         mockMvc.perform(post("/api/pets")
+                        .header(USER_ID_HEADER, TEST_USER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -61,7 +67,8 @@ public class PetControllerTest extends BaseTest {
      */
     @Test
     public void testListPets() throws Exception {
-        mockMvc.perform(get("/api/pets"))
+        mockMvc.perform(get("/api/pets")
+                        .header(USER_ID_HEADER, TEST_USER_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data").isArray());
@@ -80,6 +87,7 @@ public class PetControllerTest extends BaseTest {
         request.setSystemPrompt("用于测试激活");
 
         String responseJson = mockMvc.perform(post("/api/pets")
+                        .header(USER_ID_HEADER, TEST_USER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -92,7 +100,8 @@ public class PetControllerTest extends BaseTest {
         int petId = root.get("data").get("petId").asInt();
 
         // 3. 激活该宠物
-        mockMvc.perform(patch("/api/pets/{petId}/activation", petId))
+        mockMvc.perform(patch("/api/pets/{petId}/activate", petId)
+                        .header(USER_ID_HEADER, TEST_USER_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.isActive").value(true));
@@ -111,6 +120,7 @@ public class PetControllerTest extends BaseTest {
         request.setSystemPrompt("用于测试删除");
 
         String responseJson = mockMvc.perform(post("/api/pets")
+                        .header(USER_ID_HEADER, TEST_USER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -123,7 +133,8 @@ public class PetControllerTest extends BaseTest {
         int petId = root.get("data").get("petId").asInt();
 
         // 3. 删除该宠物
-        mockMvc.perform(delete("/api/pets/{petId}", petId))
+        mockMvc.perform(delete("/api/pets/{petId}", petId)
+                        .header(USER_ID_HEADER, TEST_USER_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data").value("删除成功"));

@@ -48,6 +48,39 @@
                 <div class="error-msg" id="regError"></div>
             </form>
         </div>
+
+        <!-- 宠物列表区域 -->
+        <div id="petListContainer" class="pet-list-container">
+            <div class="pet-list-header">
+                <span class="pet-list-title">我的桌宠</span>
+                <button id="createPetBtn" class="btn-create">+ 新建</button>
+            </div>
+            <div id="petList" class="pet-list"></div>
+            <button id="logoutBtn" class="btn-logout">退出登录</button>
+        </div>
+    </div>
+
+    <!-- 创建宠物模态框 -->
+    <div id="createPetModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <span>创建新桌宠</span>
+                <button class="modal-close" id="modalCloseBtn">✕</button>
+            </div>
+            <form id="createPetForm">
+                <label>宠物名称 <span class="required">*</span></label>
+                <input type="text" id="petNameInput" placeholder="给它起个名字吧" maxlength="20" required>
+                <label>角色名称</label>
+                <input type="text" id="petRoleInput" placeholder="如"艾莎公主"（可不填）" maxlength="30">
+                <label>性格描述 <span class="required">*</span></label>
+                <textarea id="petPromptInput" placeholder="如"你是一个温柔的AI伙伴，说话轻声细语"" rows="3" maxlength="500" required></textarea>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="modalCancelBtn">取消</button>
+                    <button type="submit" class="btn-confirm">创建</button>
+                </div>
+                <div class="error-msg" id="createPetError"></div>
+            </form>
+        </div>
     </div>
 
     <script src="./renderer.js"></script>

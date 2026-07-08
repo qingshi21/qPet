@@ -136,6 +136,8 @@ body {
     font-size: 14px;
     transition: border 0.2s;
     background: #fafafa;
+    user-select: text;
+    -webkit-app-region: no-drag;
 }
 
 .auth-panel input:focus {
@@ -154,6 +156,8 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.15s, box-shadow 0.2s;
+    user-select: text;
+    -webkit-app-region: no-drag;
 }
 
 .auth-panel button:hover {
@@ -184,4 +188,318 @@ body {
 
 .error-msg.fade-out {
     opacity: 0;
+}
+
+/* 宠物列表容器 */
+.pet-list-container {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+    overflow-y: auto;
+    padding-top: 8px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.pet-list-container.visible {
+    display: flex;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.pet-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.pet-list-title {
+    font-weight: 600;
+    font-size: 15px;
+    color: #1a1a2e;
+}
+
+.btn-create {
+    padding: 5px 16px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.2s;
+}
+.btn-create:hover {
+    transform: scale(1.05);
+    box-shadow: 0 3px 12px rgba(108, 92, 231, 0.35);
+}
+
+.pet-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.btn-logout {
+    margin-top: 8px;
+    padding: 8px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(231, 76, 60, 0.08);
+    color: #e74c3c;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.btn-logout:hover {
+    background: rgba(231, 76, 60, 0.18);
+}
+
+/* 宠物卡片 */
+.pet-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #f8f8fc;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    animation: cardFadeIn 0.3s ease forwards;
+}
+.pet-card:hover {
+    border-color: #a29bfe;
+    background: #f5f3ff;
+    transform: translateX(3px);
+}
+.pet-card.active {
+    border-color: #6c5ce7;
+    background: linear-gradient(135deg, #f0edff, #f8f0ff);
+}
+
+@keyframes cardFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.pet-card .pet-avatar-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.pet-card .info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+.pet-card .name {
+    font-weight: 600;
+    font-size: 14px;
+    color: #1a1a2e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pet-card .role {
+    font-size: 12px;
+    color: #999;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pet-card .card-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.pet-card .status {
+    font-size: 11px;
+    color: #6c5ce7;
+    background: #e8e4ff;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+}
+
+.pet-card .btn-delete {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #ccc;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    opacity: 0;
+}
+.pet-card:hover .btn-delete {
+    opacity: 1;
+}
+.pet-card .btn-delete:hover {
+    background: rgba(231, 76, 60, 0.12);
+    color: #e74c3c;
+}
+
+/* 空状态 */
+.empty-state {
+    text-align: center;
+    color: #bbb;
+    font-size: 14px;
+    padding: 30px 0;
+}
+.empty-state .empty-icon {
+    font-size: 36px;
+    margin-bottom: 8px;
+}
+
+/* 模态框 */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.modal-overlay.show {
+    display: flex;
+    opacity: 1;
+}
+
+.modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 320px;
+    padding: 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    transform: scale(0.9) translateY(20px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.modal-overlay.show .modal {
+    transform: scale(1) translateY(0);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    font-weight: 600;
+    font-size: 16px;
+    color: #1a1a2e;
+}
+.modal-close {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #999;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.modal-close:hover {
+    background: rgba(0,0,0,0.06);
+    color: #333;
+}
+
+.modal form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.modal label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+}
+.modal .required {
+    color: #e74c3c;
+}
+.modal input,
+.modal textarea {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1.5px solid #e0e0e0;
+    font-size: 14px;
+    font-family: inherit;
+    background: #fafafa;
+    transition: border 0.2s, background 0.2s;
+    resize: none;
+}
+.modal input:focus,
+.modal textarea:focus {
+    outline: none;
+    border-color: #6c5ce7;
+    background: #fff;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+}
+.modal-actions .btn-cancel {
+    flex: 1;
+    padding: 10px;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 10px;
+    background: #fff;
+    color: #666;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.modal-actions .btn-cancel:hover {
+    border-color: #ccc;
+    background: #f5f5f5;
+}
+.modal-actions .btn-confirm {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.2s;
+}
+.modal-actions .btn-confirm:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 16px rgba(108, 92, 231, 0.35);
+}
+
+.modal form .error-msg {
+    min-height: 18px;
+    margin-top: 2px;
 }

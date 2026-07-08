@@ -6,6 +6,7 @@ lumenami-frontend/.env
 # 后端
 lumenami-backend/target/
 lumenami-backend/*.log
+lumenami-backend/src/main/resources/application.properties
 
 # IDE
 .idea/

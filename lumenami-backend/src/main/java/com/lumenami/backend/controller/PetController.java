@@ -16,31 +16,33 @@ public class PetController {
 
     private final PetService petService;
 
-    private Integer getCurrentUserId() {
-        return 1;
-    }
-
     @PostMapping
-    public Result<PetResponse> createPet(@RequestBody CreatePetRequest request) {
-        PetResponse pet = petService.createPet(getCurrentUserId(), request);
+    public Result<PetResponse> createPet(
+            @RequestHeader("X-User-Id") Integer userId,
+            @RequestBody CreatePetRequest request) {
+        PetResponse pet = petService.createPet(userId, request);
         return Result.success(pet);
     }
 
     @GetMapping
-    public Result<List<PetResponse>> listPets() {
-        List<PetResponse> pets = petService.getPetsByUserId(getCurrentUserId());
+    public Result<List<PetResponse>> listPets(@RequestHeader("X-User-Id") Integer userId) {
+        List<PetResponse> pets = petService.getPetsByUserId(userId);
         return Result.success(pets);
     }
 
     @PatchMapping("/{petId}/activate")
-    public Result<PetResponse> activatePet(@PathVariable Integer petId) {
-        PetResponse pet = petService.switchPet(getCurrentUserId(), petId);
+    public Result<PetResponse> activatePet(
+            @RequestHeader("X-User-Id") Integer userId,
+            @PathVariable Integer petId) {
+        PetResponse pet = petService.switchPet(userId, petId);
         return Result.success(pet);
     }
 
     @DeleteMapping("/{petId}")
-    public Result<String> deletePet(@PathVariable Integer petId) {
-        petService.deletePet(getCurrentUserId(), petId);
+    public Result<String> deletePet(
+            @RequestHeader("X-User-Id") Integer userId,
+            @PathVariable Integer petId) {
+        petService.deletePet(userId, petId);
         return Result.success("删除成功");
     }
 }
