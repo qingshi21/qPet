@@ -9,12 +9,13 @@
         <result property="userId" column="user_id"/>
         <result property="role" column="role"/>
         <result property="content" column="content"/>
+        <result property="tokenCount" column="token_count"/>
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.lumenami.backend.model.ChatMessage" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO chat_messages (pet_id, user_id, role, content)
-        VALUES (#{petId}, #{userId}, #{role}, #{content})
+        INSERT INTO chat_messages (pet_id, user_id, role, content, token_count)
+        VALUES (#{petId}, #{userId}, #{role}, #{content}, #{tokenCount})
     </insert>
 
     <select id="findByPetId" resultMap="ChatMessageResult">

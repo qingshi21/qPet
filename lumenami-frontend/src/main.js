@@ -86,8 +86,10 @@ function createChatWindow(petInfo) {
     }
 
     chatWindow = new BrowserWindow({
-        width: 400,
-        height: 550,
+        width: 450,
+        height: 600,
+        minWidth: 450,
+        minHeight: 500,
         frame: false,
         transparent: true,
         resizable: true,

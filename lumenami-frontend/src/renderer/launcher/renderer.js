@@ -333,12 +333,40 @@ function showAuthPanel() {
     if (petDisplay) petDisplay.style.display = '';
     petListContainer.classList.remove('visible');
     petListContainer.style.display = 'none';
+    
+    // 重置表单状态，确保输入框可用
+    resetFormStates();
+}
+
+// 重置表单状态
+function resetFormStates() {
+    // 启用登录表单输入框
+    const loginUsername = document.getElementById('loginUsername');
+    const loginPassword = document.getElementById('loginPassword');
+    const loginButton = document.querySelector('#loginForm button');
+    if (loginUsername) loginUsername.disabled = false;
+    if (loginPassword) loginPassword.disabled = false;
+    if (loginButton) loginButton.disabled = false;
+    
+    // 启用注册表单输入框
+    const regUsername = document.getElementById('regUsername');
+    const regPassword = document.getElementById('regPassword');
+    const regButton = document.querySelector('#registerForm button');
+    if (regUsername) regUsername.disabled = false;
+    if (regPassword) regPassword.disabled = false;
+    if (regButton) regButton.disabled = false;
+    
+    // 清空错误提示
+    clearError('loginError');
+    clearError('regError');
 }
 
 // ===== 退出登录 =====
 if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
         localStorage.clear();
+        currentUserId = null;
+        pets = [];
         showAuthPanel();
         showMessage('loginError', '已退出登录');
     });
@@ -353,6 +381,15 @@ const modalCancelBtn = document.getElementById('modalCancelBtn');
 function openCreateModal() {
     createPetForm.reset();
     clearError('createPetError');
+    
+    // 确保模态框输入框可用
+    const petNameInput = document.getElementById('petNameInput');
+    const petRoleInput = document.getElementById('petRoleInput');
+    const petPromptInput = document.getElementById('petPromptInput');
+    if (petNameInput) petNameInput.disabled = false;
+    if (petRoleInput) petRoleInput.disabled = false;
+    if (petPromptInput) petPromptInput.disabled = false;
+    
     createPetModal.style.display = 'flex';
     // 触发 reflow 后再加 show class，让过渡动画生效
     requestAnimationFrame(() => {

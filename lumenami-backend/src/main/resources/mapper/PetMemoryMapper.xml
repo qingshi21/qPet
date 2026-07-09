@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lumenami.backend.mapper.PetMemoryMapper">
+
+    <resultMap id="PetMemoryResult" type="com.lumenami.backend.model.PetMemory">
+        <id property="id" column="id"/>
+        <result property="petId" column="pet_id"/>
+        <result property="memoryKey" column="memory_key"/>
+        <result property="memoryValue" column="memory_value"/>
+        <result property="type" column="type"/>
+        <result property="importance" column="importance"/>
+        <result property="isPermanent" column="is_permanent"/>
+        <result property="version" column="version"/>
+        <result property="previousValue" column="previous_value"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.lumenami.backend.model.PetMemory" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO pet_memories (pet_id, memory_key, memory_value, type, importance, is_permanent, version, previous_value)
+        VALUES (#{petId}, #{memoryKey}, #{memoryValue}, #{type}, #{importance}, #{isPermanent}, #{version}, #{previousValue})
+    </insert>
+
+    <select id="findByPetId" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories WHERE pet_id = #{petId} ORDER BY is_permanent DESC, importance DESC, created_at ASC
+    </select>
+
+    <select id="findByPetIdAndType" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories WHERE pet_id = #{petId} AND type = #{type} ORDER BY is_permanent DESC, importance DESC, created_at ASC
+    </select>
+
+    <select id="findLatestByKey" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories 
+        WHERE pet_id = #{petId} AND memory_key = #{memoryKey}
+        ORDER BY version DESC LIMIT 1
+    </select>
+
+    <select id="findAllVersionsByKey" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories 
+        WHERE pet_id = #{petId} AND memory_key = #{memoryKey}
+        ORDER BY version DESC
+    </select>
+
+    <delete id="deleteByPetId">
+        DELETE FROM pet_memories WHERE pet_id = #{petId}
+    </delete>
+
+    <delete id="deleteById">
+        DELETE FROM pet_memories WHERE id = #{id}
+    </delete>
+
+    <select id="findById" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories WHERE id = #{id}
+    </select>
+
+    <update id="update" parameterType="com.lumenami.backend.model.PetMemory">
+        UPDATE pet_memories
+        SET memory_value = #{memoryValue}, 
+            importance = #{importance}, 
+            is_permanent = #{isPermanent},
+            version = #{version},
+            previous_value = #{previousValue},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+</mapper>
