@@ -2,83 +2,50 @@ package com.lumenami.backend.service;
 
 import com.lumenami.backend.dto.CreatePetRequest;
 import com.lumenami.backend.dto.PetResponse;
-import com.lumenami.backend.exception.BusinessException;
-import com.lumenami.backend.mapper.PetMapper;
-import com.lumenami.backend.model.Pet;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
-@Service
-@RequiredArgsConstructor
-public class PetService {
+/**
+ * 宠物服务接口
+ */
+public interface PetService {
 
-    private final PetMapper petMapper;
+    /**
+     * 创建宠物
+     * @param userId 用户ID
+     * @param request 创建请求
+     * @return 创建的宠物信息
+     */
+    PetResponse createPet(Integer userId, CreatePetRequest request);
 
-    @Transactional
-    public PetResponse createPet(Integer userId, CreatePetRequest request) {
-        if (request.getName() == null || request.getName().trim().isEmpty()) {
-            throw new BusinessException(400, "宠物名称不能为空");
-        }
-        if (request.getSystemPrompt() == null || request.getSystemPrompt().trim().isEmpty()) {
-            throw new BusinessException(400, "System Prompt 不能为空");
-        }
+    /**
+     * 获取用户的所有宠物列表
+     * @param userId 用户ID
+     * @return 宠物列表
+     */
+    List<PetResponse> getPetsByUserId(Integer userId);
 
-        int count = petMapper.countByNameAndUserId(userId, request.getName());
-        if (count > 0) {
-            throw new BusinessException(400, "已存在同名宠物");
-        }
+    /**
+     * 切换当前激活的宠物
+     * @param userId 用户ID
+     * @param petId 宠物ID
+     * @return 切换后的宠物信息
+     */
+    PetResponse switchPet(Integer userId, Integer petId);
 
-        Pet pet = new Pet();
-        pet.setUserId(userId);
-        pet.setName(request.getName());
-        pet.setRoleName(request.getRoleName());
-        pet.setSystemPrompt(request.getSystemPrompt());
-        pet.setIsActive(0);
-        petMapper.insert(pet);
+    /**
+     * 删除宠物
+     * @param userId 用户ID
+     * @param petId 宠物ID
+     */
+    void deletePet(Integer userId, Integer petId);
 
-        return toResponse(pet);
-    }
-
-    public List<PetResponse> getPetsByUserId(Integer userId) {
-        return petMapper.findByUserId(userId)
-                .stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
-    }
-
-    @Transactional
-    public PetResponse switchPet(Integer userId, Integer petId) {
-        Pet pet = petMapper.findById(petId);
-        if (pet == null || !pet.getUserId().equals(userId)) {
-            throw new BusinessException(404, "宠物不存在");
-        }
-
-        petMapper.deactivateAllByUserId(userId);
-        petMapper.activate(petId);
-
-        Pet updated = petMapper.findById(petId);
-        return toResponse(updated);
-    }
-
-    @Transactional
-    public void deletePet(Integer userId, Integer petId) {
-        Pet pet = petMapper.findById(petId);
-        if (pet == null || !pet.getUserId().equals(userId)) {
-            throw new BusinessException(404, "宠物不存在");
-        }
-        petMapper.deleteById(petId);
-    }
-
-    private PetResponse toResponse(Pet pet) {
-        PetResponse resp = new PetResponse();
-        resp.setPetId(pet.getId());
-        resp.setName(pet.getName());
-        resp.setRoleName(pet.getRoleName());
-        resp.setIsActive(pet.getIsActive() == 1);
-        return resp;
-    }
+    /**
+     * 生成角色理解文段（不依赖宠物ID，直接根据输入内容生成）
+     * @param name 宠物名称
+     * @param roleName 角色名称
+     * @param description 用户描述
+     * @return 角色理解文段
+     */
+    String generateRoleUnderstanding(String name, String roleName, String description);
 }

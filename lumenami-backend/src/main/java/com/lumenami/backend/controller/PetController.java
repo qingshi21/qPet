@@ -4,7 +4,9 @@ import com.lumenami.backend.dto.CreatePetRequest;
 import com.lumenami.backend.dto.PetResponse;
 import com.lumenami.backend.dto.Result;
 import com.lumenami.backend.service.PetService;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,6 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/pets")
 @RequiredArgsConstructor
+@Slf4j
 public class PetController {
 
     private final PetService petService;
@@ -44,5 +47,30 @@ public class PetController {
             @PathVariable Integer petId) {
         petService.deletePet(userId, petId);
         return Result.success("删除成功");
+    }
+
+    /**
+     * 生成角色理解文段（不依赖宠物ID，直接根据输入内容生成）
+     */
+    @PostMapping("/understand-role")
+    public Result<String> understandRole(
+            @RequestHeader("X-User-Id") Integer userId,
+            @RequestBody UnderstandRoleRequest request) {
+        if (userId == null) {
+            return Result.error(400, "未登录");
+        }
+        if (request.getName() == null || request.getName().trim().isEmpty()) {
+            return Result.error(400, "请填写宠物名称");
+        }
+        String understanding = petService.generateRoleUnderstanding(
+            request.getName(), request.getRoleName(), request.getDescription());
+        return Result.success(understanding);
+    }
+
+    @Data
+    public static class UnderstandRoleRequest {
+        private String name;        // 宠物名称
+        private String roleName;    // 角色名称
+        private String description; // 用户描述
     }
 }

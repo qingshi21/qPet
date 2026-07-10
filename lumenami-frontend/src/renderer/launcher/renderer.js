@@ -377,10 +377,28 @@ const createPetModal = document.getElementById('createPetModal');
 const createPetForm = document.getElementById('createPetForm');
 const modalCloseBtn = document.getElementById('modalCloseBtn');
 const modalCancelBtn = document.getElementById('modalCancelBtn');
+const understandRoleBtn = document.getElementById('understandRoleBtn');
+const understandLoading = document.getElementById('understandLoading');
 
 function openCreateModal() {
     createPetForm.reset();
     clearError('createPetError');
+    
+    // 重置勾选框状态
+    const descChoiceGroup = document.getElementById('descriptionChoiceGroup');
+    if (descChoiceGroup) {
+        descChoiceGroup.style.display = 'none';
+    }
+    const useUserDescCheckbox = document.getElementById('useUserDescCheckbox');
+    if (useUserDescCheckbox) {
+        useUserDescCheckbox.checked = true;
+    }
+    const useAiDescCheckbox = document.getElementById('useAiDescCheckbox');
+    if (useAiDescCheckbox) {
+        useAiDescCheckbox.checked = true;
+    }
+    storedAiUnderstanding = '';
+    storedUserDescription = '';
     
     // 确保模态框输入框可用
     const petNameInput = document.getElementById('petNameInput');
@@ -420,20 +438,171 @@ if (createPetModal) {
     });
 }
 
-// 提交创建表单
+// ===== AI 理解角色 =====
+const editUnderstandingModal = document.getElementById('editUnderstandingModal');
+const closeEditUnderstandingBtn = document.getElementById('closeEditUnderstandingBtn');
+const cancelEditUnderstandingBtn = document.getElementById('cancelEditUnderstandingBtn');
+const confirmEditUnderstandingBtn = document.getElementById('confirmEditUnderstandingBtn');
+const aiUnderstandingTextarea = document.getElementById('aiUnderstandingTextarea');
+const viewAiUnderstandingBtn = document.getElementById('viewAiUnderstandingBtn');
+
+// 前端存储 AI 理解结果（不存数据库）
+let storedAiUnderstanding = '';
+// 存储用户原始描述（用于勾选框显示）
+let storedUserDescription = '';
+
+if (understandRoleBtn) {
+    understandRoleBtn.addEventListener('click', async () => {
+        const name = document.getElementById('petNameInput').value.trim();
+        const roleName = document.getElementById('petRoleInput').value.trim();
+        const description = document.getElementById('petPromptInput').value.trim();
+        
+        if (!name) {
+            showMessage('createPetError', '请先填写宠物名称');
+            return;
+        }
+        if (!roleName && !description) {
+            showMessage('createPetError', '请先填写角色名称或性格描述');
+            return;
+        }
+        
+        // 显示加载状态
+        understandRoleBtn.disabled = true;
+        understandRoleBtn.textContent = '分析中...';
+        understandLoading.style.display = 'block';
+        
+        try {
+            // 直接调用接口，不需要 petId
+            const response = await fetch('http://localhost:8080/api/pets/understand-role', {
+                method: 'POST',
+                headers: apiHeaders(),
+                body: JSON.stringify({ name, roleName, description })
+            });
+            const result = await response.json();
+            
+            if (result.code === 200) {
+                // 保存用户原始描述
+                storedUserDescription = description;
+                
+                // 将 AI 理解结果填入编辑框
+                aiUnderstandingTextarea.value = result.data;
+                
+                // 显示编辑模态框
+                editUnderstandingModal.classList.add('show');
+            } else {
+                showMessage('createPetError', result.message || '角色理解失败');
+            }
+        } catch (err) {
+            showMessage('createPetError', '网络错误');
+            console.error(err);
+        } finally {
+            understandRoleBtn.disabled = false;
+            understandRoleBtn.textContent = '✨ AI 理解角色';
+            understandLoading.style.display = 'none';
+        }
+    });
+}
+
+// 关闭 AI 理解编辑模态框
+if (closeEditUnderstandingBtn) {
+    closeEditUnderstandingBtn.addEventListener('click', () => {
+        editUnderstandingModal.classList.remove('show');
+    });
+}
+
+if (cancelEditUnderstandingBtn) {
+    cancelEditUnderstandingBtn.addEventListener('click', () => {
+        editUnderstandingModal.classList.remove('show');
+    });
+}
+
+// 点击模态框背景关闭
+if (editUnderstandingModal) {
+    editUnderstandingModal.addEventListener('click', (e) => {
+        if (e.target === editUnderstandingModal) {
+            editUnderstandingModal.classList.remove('show');
+        }
+    });
+}
+
+// 确认保存 AI 理解结果（只存到前端变量，不存数据库）
+if (confirmEditUnderstandingBtn) {
+    confirmEditUnderstandingBtn.addEventListener('click', () => {
+        const aiDescription = aiUnderstandingTextarea.value.trim();
+        
+        if (!aiDescription) {
+            alert('AI 描述不能为空');
+            return;
+        }
+        
+        // 存储到前端变量
+        storedAiUnderstanding = aiDescription;
+        
+        // 关闭编辑模态框
+        editUnderstandingModal.classList.remove('show');
+        
+        // 显示勾选框组
+        document.getElementById('descriptionChoiceGroup').style.display = 'block';
+        
+        // 默认两个都勾选
+        document.getElementById('useUserDescCheckbox').checked = true;
+        document.getElementById('useAiDescCheckbox').checked = true;
+        
+        showMessage('createPetError', '✅ AI 理解已保存！请勾选你要使用的描述', true);
+    });
+}
+
+// 查看 AI 理解结果（只读弹窗）
+if (viewAiUnderstandingBtn) {
+    viewAiUnderstandingBtn.addEventListener('click', () => {
+        if (!storedAiUnderstanding) {
+            showMessage('createPetError', '还没有 AI 理解结果');
+            return;
+        }
+        // 填入 textarea 并显示模态框
+        aiUnderstandingTextarea.value = storedAiUnderstanding;
+        editUnderstandingModal.classList.add('show');
+    });
+}
+
+// 提交创建宠物表单
 if (createPetForm) {
     createPetForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('petNameInput').value.trim();
         const roleName = document.getElementById('petRoleInput').value.trim();
-        const systemPrompt = document.getElementById('petPromptInput').value.trim();
-
+        const userDesc = document.getElementById('petPromptInput').value.trim();
+        
         if (!name) {
             showMessage('createPetError', '请输入宠物名称');
             return;
         }
-        if (!systemPrompt) {
-            showMessage('createPetError', '请输入性格描述');
+        
+        // 获取勾选状态
+        const useUserDesc = document.getElementById('useUserDescCheckbox')?.checked || false;
+        const useAiDesc = document.getElementById('useAiDescCheckbox')?.checked || false;
+        
+        // 如果没有使用 AI 理解，至少需要用户描述
+        if (!useUserDesc && !useAiDesc) {
+            showMessage('createPetError', '请至少勾选一个描述来源');
+            return;
+        }
+        
+        // 根据勾选构建 systemPrompt
+        let systemPrompt = '';
+        if (useUserDesc && useAiDesc) {
+            // 两个都勾选：拼接
+            systemPrompt = '【用户描述】\n' + userDesc + '\n\n【AI 角色理解】\n' + storedAiUnderstanding;
+        } else if (useAiDesc) {
+            // 只用 AI 理解
+            systemPrompt = storedAiUnderstanding;
+        } else {
+            // 只用用户描述
+            systemPrompt = userDesc;
+        }
+        
+        if (!systemPrompt.trim()) {
+            showMessage('createPetError', '描述内容不能为空');
             return;
         }
 
@@ -447,6 +616,9 @@ if (createPetForm) {
             if (result.code === 200) {
                 showMessage('loginError', '✅ 桌宠创建成功！', true);
                 closeCreateModal();
+                // 重置 AI 理解相关状态
+                storedAiUnderstanding = '';
+                storedUserDescription = '';
                 await fetchPets();
             } else {
                 showMessage('createPetError', result.message || '创建失败');

@@ -9,6 +9,7 @@ const petNameEl = document.getElementById('petName');
 const petAvatarEl = document.getElementById('petAvatar');
 const closeBtn = document.getElementById('closeBtn');
 const minimizeBtn = document.getElementById('minimizeBtn');
+const connectionStatus = document.getElementById('connectionStatus');
 
 // 记忆相关 DOM
 const memoryBtn = document.getElementById('memoryBtn');
@@ -34,11 +35,167 @@ let conversationHistory = [];
 let currentPet = null;
 let isWaitingResponse = false;
 let editingMemoryId = null; // 当前正在编辑的记忆ID
+let lastMessageDate = null; // 用于日期分组
+
+// ===== WebSocket 相关 =====
+let ws = null;
+let wsConnected = false;
+let heartbeatInterval = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const HEARTBEAT_INTERVAL = 30000; // 30秒心跳间隔
+const RECONNECT_DELAY = 3000; // 重连延迟 3秒
 
 // ===== 宠物头像映射 =====
 const petEmojis = ['🐱', '🐶', '🐰', '🦊', '🐼', '🐨', '🦄', '🐲', '🐧', '🦋'];
 function getPetEmoji(petId) {
     return petEmojis[petId % petEmojis.length];
+}
+
+// ===== WebSocket 连接管理 =====
+function connectWebSocket() {
+    const userId = localStorage.getItem('userId');
+    if (!userId) {
+        console.error('无法建立 WebSocket 连接：缺少 userId');
+        updateConnectionStatus('disconnected');
+        return;
+    }
+
+    // 如果已有连接，先关闭
+    if (ws) {
+        ws.close();
+    }
+
+    const wsUrl = `ws://localhost:8080/ws/chat?userId=${userId}`;
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        console.log('WebSocket 连接已建立');
+        wsConnected = true;
+        reconnectAttempts = 0;
+        updateConnectionStatus('connected');
+        startHeartbeat();
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const message = JSON.parse(event.data);
+            handleWebSocketMessage(message);
+        } catch (err) {
+            console.error('WebSocket 消息解析失败:', err);
+        }
+    };
+
+    ws.onerror = (error) => {
+        console.error('WebSocket 错误:', error);
+        updateConnectionStatus('error');
+    };
+
+    ws.onclose = () => {
+        console.log('WebSocket 连接已关闭');
+        wsConnected = false;
+        stopHeartbeat();
+        updateConnectionStatus('disconnected');
+        
+        // 尝试重连
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts++;
+            console.log(`尝试重连 (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+            updateConnectionStatus('reconnecting');
+            setTimeout(connectWebSocket, RECONNECT_DELAY);
+        } else {
+            console.error('达到最大重连次数，停止重连');
+            updateConnectionStatus('failed');
+        }
+    };
+}
+
+// 处理 WebSocket 消息
+function handleWebSocketMessage(message) {
+    switch (message.type) {
+        case 'connected':
+            console.log('WebSocket 连接确认');
+            break;
+        
+        case 'typing':
+            // 显示正在输入指示器
+            showTypingIndicator();
+            break;
+        
+        case 'chat_reply':
+            // 移除打字指示器并显示 AI 回复
+            removeTypingIndicator();
+            if (message.reply) {
+                appendMessage('ai', message.reply, true, message.timestamp);
+                conversationHistory.push({ role: 'assistant', content: message.reply });
+            }
+            isWaitingResponse = false;
+            sendBtn.disabled = !messageInput.value.trim();
+            break;
+        
+        case 'pong':
+            // 心跳响应
+            console.debug('心跳响应');
+            break;
+        
+        case 'error':
+            // 错误处理
+            removeTypingIndicator();
+            appendMessage('ai', `错误: ${message.errorMessage || '未知错误'}`);
+            isWaitingResponse = false;
+            sendBtn.disabled = !messageInput.value.trim();
+            break;
+        
+        default:
+            console.warn('未知的消息类型:', message.type);
+    }
+}
+
+// 发送 WebSocket 消息
+function sendWebSocketMessage(type, data) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        console.error('WebSocket 未连接');
+        return false;
+    }
+    
+    const message = { type, ...data, timestamp: Date.now() };
+    ws.send(JSON.stringify(message));
+    return true;
+}
+
+// 开始心跳
+function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            sendWebSocketMessage('ping', {});
+        }
+    }, HEARTBEAT_INTERVAL);
+}
+
+// 停止心跳
+function stopHeartbeat() {
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
+}
+
+// 更新连接状态显示
+function updateConnectionStatus(status) {
+    if (!connectionStatus) return;
+    
+    const statusMap = {
+        'connected': { text: '已连接', class: 'status-connected' },
+        'disconnected': { text: '未连接', class: 'status-disconnected' },
+        'reconnecting': { text: '重连中...', class: 'status-reconnecting' },
+        'error': { text: '连接错误', class: 'status-error' },
+        'failed': { text: '连接失败', class: 'status-failed' }
+    };
+    
+    const statusInfo = statusMap[status] || statusMap['disconnected'];
+    connectionStatus.textContent = statusInfo.text;
+    connectionStatus.className = 'connection-status ' + statusInfo.class;
 }
 
 // ===== 窗口控制 =====
@@ -63,6 +220,8 @@ ipcRenderer.on('set-pet-info', (event, petInfo) => {
     if (petAvatarEl) {
         petAvatarEl.textContent = getPetEmoji(petInfo.petId);
     }
+    // 建立 WebSocket 连接
+    connectWebSocket();
     // 加载历史消息
     loadHistory();
 });
@@ -87,10 +246,13 @@ async function loadHistory() {
                 welcomeMsg.style.display = 'none';
             }
             
+            // 重置日期分组
+            lastMessageDate = null;
+            
             // 渲染历史消息
             for (const msg of result.data) {
                 const type = msg.role === 'user' ? 'user' : 'ai';
-                appendMessage(type, msg.content, false); // false = 不动画
+                appendMessage(type, msg.content, false, msg.createdAt); // 传入时间戳
                 conversationHistory.push({ role: msg.role, content: msg.content });
             }
         }
@@ -126,7 +288,7 @@ sendBtn.addEventListener('click', () => {
 });
 
 // ===== 发送消息 =====
-async function sendMessage() {
+function sendMessage() {
     const text = messageInput.value.trim();
     if (!text || isWaitingResponse) return;
 
@@ -147,49 +309,38 @@ async function sendMessage() {
     sendBtn.disabled = true;
     isWaitingResponse = true;
 
-    // 显示打字指示器
-    showTypingIndicator();
-
-    try {
-        // 调用后端 API
-        const response = await fetch('http://localhost:8080/api/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-User-Id': String(localStorage.getItem('userId') || '')
-            },
-            body: JSON.stringify({
-                petId: currentPet?.petId,
-                message: text,
-                history: conversationHistory.slice(0, -1) // 不包含最后一条（后端会自己构建）
-            })
-        });
-
-        const result = await response.json();
-        
-        // 移除打字指示器
-        removeTypingIndicator();
-
-        if (result.code === 200) {
-            const reply = result.data.reply;
-            appendMessage('ai', reply);
-            conversationHistory.push({ role: 'assistant', content: reply });
-        } else {
-            appendMessage('ai', '抱歉，我遇到了一些问题...');
-            console.error('Chat error:', result.message);
-        }
-    } catch (err) {
-        removeTypingIndicator();
-        appendMessage('ai', '网络错误，请确认后端服务已启动');
-        console.error('Chat error:', err);
+    // 检查 WebSocket 是否连接
+    if (!wsConnected) {
+        appendMessage('ai', '网络连接已断开，正在尝试重连...');
+        isWaitingResponse = false;
+        sendBtn.disabled = !messageInput.value.trim();
+        return;
     }
 
-    isWaitingResponse = false;
-    sendBtn.disabled = !messageInput.value.trim();
+    // 通过 WebSocket 发送消息（后端会先推送 typing 消息，再推送 chat_reply）
+    const success = sendWebSocketMessage('chat', {
+        petId: currentPet?.petId,
+        message: text
+    });
+
+    if (!success) {
+        removeTypingIndicator();
+        appendMessage('ai', '消息发送失败，请重试');
+        isWaitingResponse = false;
+        sendBtn.disabled = !messageInput.value.trim();
+    }
 }
 
 // ===== 消息渲染 =====
-function appendMessage(type, text, animate = true) {
+function appendMessage(type, text, animate = true, timestamp = null) {
+    // 检查是否需要插入日期分隔符
+    const msgDate = timestamp ? new Date(timestamp) : new Date();
+    const dateStr = formatDate(msgDate);
+    if (lastMessageDate !== dateStr) {
+        insertDateSeparator(dateStr);
+        lastMessageDate = dateStr;
+    }
+
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${type}`;
     
@@ -210,15 +361,59 @@ function appendMessage(type, text, animate = true) {
     bubble.className = 'bubble';
     bubble.textContent = text;
 
+    // 时间戳
+    const timeEl = document.createElement('div');
+    timeEl.className = 'message-time';
+    timeEl.textContent = formatTime(msgDate);
+
     msgDiv.appendChild(avatar);
-    msgDiv.appendChild(bubble);
+    
+    const bubbleWrapper = document.createElement('div');
+    bubbleWrapper.className = 'bubble-wrapper';
+    bubbleWrapper.appendChild(bubble);
+    bubbleWrapper.appendChild(timeEl);
+    
+    msgDiv.appendChild(bubbleWrapper);
     chatArea.appendChild(msgDiv);
 
     // 滚动到底部
     scrollToBottom();
 }
 
+// 插入日期分隔符
+function insertDateSeparator(dateStr) {
+    const separator = document.createElement('div');
+    separator.className = 'date-separator';
+    separator.textContent = dateStr;
+    chatArea.appendChild(separator);
+}
+
+// 格式化日期为友好显示
+function formatDate(date) {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+        return '今天';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+        return '昨天';
+    } else {
+        return `${date.getMonth() + 1}月${date.getDate()}日`;
+    }
+}
+
+// 格式化时间为 HH:mm
+function formatTime(date) {
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+}
+
 function showTypingIndicator() {
+    // 去重：如果已经存在则不再重复创建
+    if (document.getElementById('typingIndicator')) return;
+
     const indicator = document.createElement('div');
     indicator.className = 'message ai';
     indicator.id = 'typingIndicator';
@@ -239,10 +434,9 @@ function showTypingIndicator() {
 }
 
 function removeTypingIndicator() {
-    const indicator = document.getElementById('typingIndicator');
-    if (indicator) {
-        indicator.remove();
-    }
+    // 移除所有 typing 指示器（防止重复创建导致残留）
+    const indicators = chatArea.querySelectorAll('#typingIndicator');
+    indicators.forEach(el => el.remove());
 }
 
 function scrollToBottom() {
@@ -461,11 +655,20 @@ if (confirmAddMemory) {
                 document.getElementById('memoryImportance').value = '5';
                 // 刷新列表
                 loadMemories();
+                // 确保输入框可用
+                isWaitingResponse = false;
+                sendBtn.disabled = !messageInput.value.trim();
             } else {
                 alert('添加失败：' + result.message);
+                // 错误时也要重置状态
+                isWaitingResponse = false;
+                sendBtn.disabled = !messageInput.value.trim();
             }
         } catch (err) {
             alert('网络错误，请重试');
+            // 异常时也要重置状态
+            isWaitingResponse = false;
+            sendBtn.disabled = !messageInput.value.trim();
         }
     });
 }
@@ -521,11 +724,20 @@ if (confirmEditMemory) {
                 editMemoryModal.classList.remove('visible');
                 editingMemoryId = null;
                 loadMemories();
+                // 确保输入框可用
+                isWaitingResponse = false;
+                sendBtn.disabled = !messageInput.value.trim();
             } else {
                 alert('修改失败：' + result.message);
+                // 错误时也要重置状态
+                isWaitingResponse = false;
+                sendBtn.disabled = !messageInput.value.trim();
             }
         } catch (err) {
             alert('网络错误，请重试');
+            // 异常时也要重置状态
+            isWaitingResponse = false;
+            sendBtn.disabled = !messageInput.value.trim();
         }
     });
 }
@@ -547,11 +759,20 @@ window.deleteMemory = async function(id, label) {
         
         if (result.code === 200) {
             loadMemories();
+            // 确保输入框可用（防止因之前操作遗留的禁用状态）
+            isWaitingResponse = false;
+            sendBtn.disabled = !messageInput.value.trim();
         } else {
             alert('删除失败：' + result.message);
+            // 错误时也要重置状态
+            isWaitingResponse = false;
+            sendBtn.disabled = !messageInput.value.trim();
         }
     } catch (err) {
         alert('网络错误，请重试');
+        // 异常时也要重置状态
+        isWaitingResponse = false;
+        sendBtn.disabled = !messageInput.value.trim();
     }
 };
 

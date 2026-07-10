@@ -5,6 +5,7 @@ import com.lumenami.backend.model.PetMemory;
 import com.lumenami.backend.service.MemoryService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/memories")
 @RequiredArgsConstructor
+@Slf4j
 public class MemoryController {
 
     private final MemoryService memoryService;
@@ -23,7 +25,8 @@ public class MemoryController {
     public Result<List<PetMemory>> getMemories(
             @RequestHeader("X-User-Id") Integer userId,
             @PathVariable Integer petId) {
-        // TODO: 验证用户是否有权限访问该宠物的记忆
+        // 校验用户是否拥有该宠物
+        memoryService.verifyPetOwnership(userId, petId);
         List<PetMemory> memories = memoryService.getMemories(petId);
         return Result.success(memories);
     }
@@ -36,6 +39,8 @@ public class MemoryController {
             @RequestHeader("X-User-Id") Integer userId,
             @PathVariable Integer petId,
             @PathVariable String key) {
+        // 校验用户是否拥有该宠物
+        memoryService.verifyPetOwnership(userId, petId);
         List<PetMemory> history = memoryService.getMemoryHistory(petId, key);
         return Result.success(history);
     }
@@ -47,7 +52,7 @@ public class MemoryController {
     public Result<Void> deleteMemory(
             @RequestHeader("X-User-Id") Integer userId,
             @PathVariable Integer id) {
-        memoryService.deleteMemory(id);
+        memoryService.deleteMemory(userId, id);
         return Result.success(null);
     }
 
@@ -59,7 +64,7 @@ public class MemoryController {
             @RequestHeader("X-User-Id") Integer userId,
             @PathVariable Integer id,
             @RequestBody UpdateMemoryRequest request) {
-        memoryService.updateMemory(id, request.getValue(), request.getImportance());
+        memoryService.updateMemory(userId, id, request.getValue(), request.getImportance());
         return Result.success(null);
     }
 
@@ -70,6 +75,19 @@ public class MemoryController {
     public Result<Void> addMemory(
             @RequestHeader("X-User-Id") Integer userId,
             @RequestBody AddMemoryRequest request) {
+        // 参数校验
+        if (request.getPetId() == null) {
+            return Result.error(400, "宠物ID不能为空");
+        }
+        if (request.getKey() == null || request.getKey().trim().isEmpty()) {
+            return Result.error(400, "记忆键名不能为空");
+        }
+        if (request.getValue() == null || request.getValue().trim().isEmpty()) {
+            return Result.error(400, "记忆值不能为空");
+        }
+        // 校验用户是否拥有该宠物
+        memoryService.verifyPetOwnership(userId, request.getPetId());
+        
         memoryService.saveMemory(
             request.getPetId(), 
             request.getKey(), 
