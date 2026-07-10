@@ -37,7 +37,7 @@ function showMessage(elementId, message, isSuccess = false) {
     }
 
     el.textContent = message;
-    el.style.color = isSuccess ? '#27ae60' : '#e74c3c';
+    el.style.color = isSuccess ? '#2ecc71' : '#e74c3c';
     el.classList.remove('fade-out');
     el.style.opacity = '1';
 
@@ -226,7 +226,7 @@ function renderPetList() {
     if (pets.length === 0) {
         petListEl.innerHTML = `
             <div class="empty-state">
-                <div class="empty-icon">✨</div>
+                <div class="empty-icon">+</div>
                 <div>还没有桌宠，点击右上角创建吧</div>
             </div>`;
         return;
@@ -497,7 +497,7 @@ if (understandRoleBtn) {
             console.error(err);
         } finally {
             understandRoleBtn.disabled = false;
-            understandRoleBtn.textContent = '✨ AI 理解角色';
+            understandRoleBtn.textContent = 'AI 理解角色';
             understandLoading.style.display = 'none';
         }
     });
@@ -531,7 +531,7 @@ if (confirmEditUnderstandingBtn) {
         const aiDescription = aiUnderstandingTextarea.value.trim();
         
         if (!aiDescription) {
-            alert('AI 描述不能为空');
+            showMessage('editUnderstandingError', 'AI 描述不能为空');
             return;
         }
         

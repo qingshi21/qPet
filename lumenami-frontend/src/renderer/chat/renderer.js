@@ -37,6 +37,26 @@ let isWaitingResponse = false;
 let editingMemoryId = null; // 当前正在编辑的记忆ID
 let lastMessageDate = null; // 用于日期分组
 
+// ===== Toast 通知 =====
+function showToast(message, type = 'error') {
+    let toast = document.getElementById('toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.className = 'toast toast-' + type;
+    // 触发重绘后显示
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+        toast.classList.remove('show');
+    }, 2500);
+}
+
 // ===== WebSocket 相关 =====
 let ws = null;
 let wsConnected = false;
@@ -477,9 +497,9 @@ const memoryLabelMap = {
 
 // 类型标签映射
 const memoryTypeLabels = {
-    'PROFILE': '📋 用户画像',
-    'PROJECT': '💼 项目信息',
-    'PREFERENCE': '❤️ 偏好设置'
+    'PROFILE': '用户画像',
+    'PROJECT': '项目信息',
+    'PREFERENCE': '偏好设置'
 };
 
 // 获取友好标签
@@ -524,14 +544,14 @@ async function loadMemories() {
         }
     } catch (err) {
         console.error('Failed to load memories:', err);
-        memoryList.innerHTML = '<div class="memory-empty"><div class="memory-empty-icon">⚠️</div><div class="memory-empty-text">加载失败</div></div>';
+        memoryList.innerHTML = '<div class="memory-empty"><div class="memory-empty-icon" style="font-size:28px;opacity:0.4;color:#5A5766;">!</div><div class="memory-empty-text">加载失败</div></div>';
     }
 }
 
 // 渲染记忆列表
 function renderMemories(memories) {
     if (!memories || memories.length === 0) {
-        memoryList.innerHTML = '<div class="memory-empty"><div class="memory-empty-icon">🧠</div><div class="memory-empty-text">还没有记忆哦<br>和TA多聊聊天吧！</div></div>';
+        memoryList.innerHTML = '<div class="memory-empty"><div class="memory-empty-icon" style="font-size:28px;opacity:0.4;color:#5A5766;">M</div><div class="memory-empty-text">还没有记忆哦<br>和TA多聊聊天吧！</div></div>';
         return;
     }
     
@@ -564,7 +584,7 @@ function renderMemories(memories) {
             const permanentClass = mem.isPermanent ? ' permanent' : '';
             const typeClass = type.toLowerCase();
             const stars = '★'.repeat(Math.min(mem.importance || 5, 10));
-            const permanentBadge = mem.isPermanent ? ' 🔒' : '';
+            const permanentBadge = mem.isPermanent ? ' [locked]' : '';
             
             html += `
                 <div class="memory-card${permanentClass}" data-id="${mem.id}" data-key="${mem.memoryKey}">
@@ -575,9 +595,9 @@ function renderMemories(memories) {
                         <span>v${mem.version}</span>
                     </div>
                     <div class="memory-actions-card">
-                        <button class="btn-memory-action" onclick="editMemory(${mem.id}, '${escapeAttr(mem.memoryKey)}', '${escapeAttr(mem.memoryValue)}', ${mem.importance || 5})">✏️ 编辑</button>
-                        <button class="btn-memory-action" onclick="viewHistory('${escapeAttr(mem.memoryKey)}')">📜 历史</button>
-                        <button class="btn-memory-action delete" onclick="deleteMemory(${mem.id}, '${escapeAttr(getMemoryLabel(mem.memoryKey))}')">🗑️ 删除</button>
+                        <button class="btn-memory-action" onclick="editMemory(${mem.id}, '${escapeAttr(mem.memoryKey)}', '${escapeAttr(mem.memoryValue)}', ${mem.importance || 5})">edit</button>
+                        <button class="btn-memory-action" onclick="viewHistory('${escapeAttr(mem.memoryKey)}')">hist</button>
+                        <button class="btn-memory-action delete" onclick="deleteMemory(${mem.id}, '${escapeAttr(getMemoryLabel(mem.memoryKey))}')">del</button>
                     </div>
                 </div>
             `;
@@ -625,7 +645,7 @@ if (confirmAddMemory) {
         const importance = parseInt(document.getElementById('memoryImportance').value) || 5;
         
         if (!key || !value) {
-            alert('请填写记忆键名和值');
+            showToast('请填写记忆键名和值');
             return;
         }
         
@@ -659,13 +679,13 @@ if (confirmAddMemory) {
                 isWaitingResponse = false;
                 sendBtn.disabled = !messageInput.value.trim();
             } else {
-                alert('添加失败：' + result.message);
+                showToast('添加失败：' + result.message);
                 // 错误时也要重置状态
                 isWaitingResponse = false;
                 sendBtn.disabled = !messageInput.value.trim();
             }
         } catch (err) {
-            alert('网络错误，请重试');
+            showToast('网络错误，请重试');
             // 异常时也要重置状态
             isWaitingResponse = false;
             sendBtn.disabled = !messageInput.value.trim();
@@ -704,7 +724,7 @@ if (confirmEditMemory) {
         const importance = parseInt(document.getElementById('editMemoryImportance').value) || 5;
         
         if (!value) {
-            alert('记忆值不能为空');
+            showToast('记忆值不能为空');
             return;
         }
         
@@ -728,13 +748,13 @@ if (confirmEditMemory) {
                 isWaitingResponse = false;
                 sendBtn.disabled = !messageInput.value.trim();
             } else {
-                alert('修改失败：' + result.message);
+                showToast('修改失败：' + result.message);
                 // 错误时也要重置状态
                 isWaitingResponse = false;
                 sendBtn.disabled = !messageInput.value.trim();
             }
         } catch (err) {
-            alert('网络错误，请重试');
+            showToast('网络错误，请重试');
             // 异常时也要重置状态
             isWaitingResponse = false;
             sendBtn.disabled = !messageInput.value.trim();
@@ -763,13 +783,13 @@ window.deleteMemory = async function(id, label) {
             isWaitingResponse = false;
             sendBtn.disabled = !messageInput.value.trim();
         } else {
-            alert('删除失败：' + result.message);
+            showToast('删除失败：' + result.message);
             // 错误时也要重置状态
             isWaitingResponse = false;
             sendBtn.disabled = !messageInput.value.trim();
         }
     } catch (err) {
-        alert('网络错误，请重试');
+        showToast('网络错误，请重试');
         // 异常时也要重置状态
         isWaitingResponse = false;
         sendBtn.disabled = !messageInput.value.trim();
@@ -794,10 +814,10 @@ window.viewHistory = async function(key) {
             renderHistory(result.data || [], key);
             memoryHistoryModal.classList.add('visible');
         } else {
-            alert('加载历史失败');
+            showToast('加载历史失败');
         }
     } catch (err) {
-        alert('网络错误，请重试');
+        showToast('网络错误，请重试');
     }
 };
 

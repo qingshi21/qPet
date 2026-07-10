@@ -8,7 +8,7 @@
 <body>
     <!-- 顶部拖拽栏 -->
     <div class="title-bar">
-        <span class="title">✨ LumenAmi</span>
+        <span class="title">LumenAmi</span>
         <div class="window-controls">
             <button class="btn-minimize" id="minimizeBtn">─</button>
             <button class="btn-close" id="closeBtn">✕</button>
@@ -74,7 +74,7 @@
                 <input type="text" id="petRoleInput" placeholder="如"艾莎公主"（可不填）" maxlength="30">
                 <label>性格描述 <span class="required">*</span></label>
                 <textarea id="petPromptInput" placeholder="如“你是一个温柔的AI伙伴，说话轻声细语”" rows="3" maxlength="500" required></textarea>
-                <button type="button" class="btn-understand-role" id="understandRoleBtn">✨ AI 理解角色</button>
+                <button type="button" class="btn-understand-role" id="understandRoleBtn">AI 理解角色</button>
                 <div class="understand-loading" id="understandLoading" style="display:none;">AI 正在分析角色中...</div>
                 
                 <!-- 描述选择勾选框（AI 理解完成后显示） -->
@@ -87,7 +87,7 @@
                         <input type="checkbox" id="useAiDescCheckbox" checked>
                         <span>使用 AI 理解结果</span>
                     </label>
-                    <button type="button" class="btn-view-ai" id="viewAiUnderstandingBtn">📖 查看 AI 理解结果</button>
+                    <button type="button" class="btn-view-ai" id="viewAiUnderstandingBtn">查看 AI 理解结果</button>
                     <p class="checkbox-tip">至少勾选一个，两个都勾选会拼接在一起</p>
                 </div>
                 <div class="modal-actions">
@@ -109,6 +109,7 @@
             <div class="modal-body">
                 <p class="understanding-tip">以下是 AI 根据你的描述生成的角色理解，你可以编辑修改后保存：</p>
                 <textarea id="aiUnderstandingTextarea" rows="12" placeholder="AI 生成的角色理解将显示在这里..."></textarea>
+                <div class="error-msg" id="editUnderstandingError"></div>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn-cancel" id="cancelEditUnderstandingBtn">取消</button>
