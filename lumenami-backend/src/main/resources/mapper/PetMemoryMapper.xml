@@ -9,38 +9,128 @@
         <result property="memoryKey" column="memory_key"/>
         <result property="memoryValue" column="memory_value"/>
         <result property="type" column="type"/>
+        <result property="level" column="level"/>
+        <result property="state" column="state"/>
         <result property="importance" column="importance"/>
-        <result property="isPermanent" column="is_permanent"/>
+        <result property="weight" column="weight"/>
+        <result property="accessCount" column="access_count"/>
+        <result property="embedding" column="embedding"/>
         <result property="version" column="version"/>
         <result property="previousValue" column="previous_value"/>
+        <result property="archivedAt" column="archived_at"/>
+        <result property="deletedAt" column="deleted_at"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.lumenami.backend.model.PetMemory" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO pet_memories (pet_id, memory_key, memory_value, type, importance, is_permanent, version, previous_value)
-        VALUES (#{petId}, #{memoryKey}, #{memoryValue}, #{type}, #{importance}, #{isPermanent}, #{version}, #{previousValue})
+        INSERT INTO pet_memories (pet_id, memory_key, memory_value, type, level, state, importance, weight, access_count, embedding, version, previous_value)
+        VALUES (#{petId}, #{memoryKey}, #{memoryValue}, #{type}, #{level}, #{state}, #{importance}, #{weight}, #{accessCount}, #{embedding}, #{version}, #{previousValue})
     </insert>
 
-    <select id="findByPetId" resultMap="PetMemoryResult">
-        SELECT * FROM pet_memories WHERE pet_id = #{petId} ORDER BY is_permanent DESC, importance DESC, created_at ASC
-    </select>
+    <update id="update" parameterType="com.lumenami.backend.model.PetMemory">
+        UPDATE pet_memories
+        SET memory_value = #{memoryValue},
+            importance = #{importance},
+            weight = #{weight},
+            level = #{level},
+            version = #{version},
+            previous_value = #{previousValue},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
 
-    <select id="findByPetIdAndType" resultMap="PetMemoryResult">
-        SELECT * FROM pet_memories WHERE pet_id = #{petId} AND type = #{type} ORDER BY is_permanent DESC, importance DESC, created_at ASC
+    <select id="findById" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories WHERE id = #{id}
     </select>
 
     <select id="findLatestByKey" resultMap="PetMemoryResult">
-        SELECT * FROM pet_memories 
+        SELECT * FROM pet_memories
         WHERE pet_id = #{petId} AND memory_key = #{memoryKey}
         ORDER BY version DESC LIMIT 1
     </select>
 
     <select id="findAllVersionsByKey" resultMap="PetMemoryResult">
-        SELECT * FROM pet_memories 
+        SELECT * FROM pet_memories
         WHERE pet_id = #{petId} AND memory_key = #{memoryKey}
         ORDER BY version DESC
     </select>
+
+    <select id="findActiveByPetId" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories
+        WHERE pet_id = #{petId} AND state = 'ACTIVE'
+        ORDER BY importance DESC, created_at ASC
+    </select>
+
+    <select id="findPermanentByPetId" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories
+        WHERE pet_id = #{petId} AND level = 'PERMANENT' AND state = 'ACTIVE'
+        ORDER BY importance DESC
+    </select>
+
+    <select id="findTimelinessStatus" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories
+        WHERE pet_id = #{petId}
+          AND type = 'STATUS'
+          AND state = 'ACTIVE'
+          AND weight &gt; #{weightThreshold}
+          AND created_at &gt;= #{since}
+        ORDER BY weight DESC
+    </select>
+
+    <select id="findDecayable" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories
+        WHERE state = 'ACTIVE' AND level != 'PERMANENT'
+    </select>
+
+    <select id="findArchivable" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories
+        WHERE state = 'ACTIVE'
+          AND level != 'PERMANENT'
+          AND weight &lt; #{weightThreshold}
+    </select>
+
+    <select id="findExpiredArchived" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories
+        WHERE state = 'ARCHIVED'
+          AND archived_at IS NOT NULL
+          AND archived_at &lt; DATE_SUB(NOW(), INTERVAL #{days} DAY)
+    </select>
+
+    <select id="findExpiredDeleted" resultMap="PetMemoryResult">
+        SELECT * FROM pet_memories
+        WHERE state = 'DELETED'
+          AND deleted_at IS NOT NULL
+          AND deleted_at &lt; DATE_SUB(NOW(), INTERVAL #{days} DAY)
+    </select>
+
+    <update id="updateWeightAndState">
+        UPDATE pet_memories
+        SET weight = #{weight},
+            state = #{state},
+            archived_at = #{archivedAt},
+            deleted_at = #{deletedAt},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="incrementAccessCount">
+        UPDATE pet_memories
+        SET access_count = access_count + 1,
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateEmbedding">
+        UPDATE pet_memories
+        SET embedding = #{embedding},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <delete id="physicalDeleteById">
+        DELETE FROM pet_memories WHERE id = #{id}
+    </delete>
 
     <delete id="deleteByPetId">
         DELETE FROM pet_memories WHERE pet_id = #{petId}
@@ -49,20 +139,5 @@
     <delete id="deleteById">
         DELETE FROM pet_memories WHERE id = #{id}
     </delete>
-
-    <select id="findById" resultMap="PetMemoryResult">
-        SELECT * FROM pet_memories WHERE id = #{id}
-    </select>
-
-    <update id="update" parameterType="com.lumenami.backend.model.PetMemory">
-        UPDATE pet_memories
-        SET memory_value = #{memoryValue}, 
-            importance = #{importance}, 
-            is_permanent = #{isPermanent},
-            version = #{version},
-            previous_value = #{previousValue},
-            updated_at = NOW()
-        WHERE id = #{id}
-    </update>
 
 </mapper>

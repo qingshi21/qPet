@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
@@ -25,7 +26,6 @@ public class MemoryController {
     public Result<List<PetMemory>> getMemories(
             @RequestAttribute("userId") Integer userId,
             @PathVariable Integer petId) {
-        // 校验用户是否拥有该宠物
         memoryService.verifyPetOwnership(userId, petId);
         List<PetMemory> memories = memoryService.getMemories(petId);
         return Result.success(memories);
@@ -39,7 +39,6 @@ public class MemoryController {
             @RequestAttribute("userId") Integer userId,
             @PathVariable Integer petId,
             @PathVariable String key) {
-        // 校验用户是否拥有该宠物
         memoryService.verifyPetOwnership(userId, petId);
         List<PetMemory> history = memoryService.getMemoryHistory(petId, key);
         return Result.success(history);
@@ -75,7 +74,6 @@ public class MemoryController {
     public Result<Void> addMemory(
             @RequestAttribute("userId") Integer userId,
             @RequestBody AddMemoryRequest request) {
-        // 参数校验
         if (request.getPetId() == null) {
             return Result.error(400, "宠物ID不能为空");
         }
@@ -85,14 +83,14 @@ public class MemoryController {
         if (request.getValue() == null || request.getValue().trim().isEmpty()) {
             return Result.error(400, "记忆值不能为空");
         }
-        // 校验用户是否拥有该宠物
         memoryService.verifyPetOwnership(userId, request.getPetId());
-        
+
         memoryService.saveMemory(
-            request.getPetId(), 
-            request.getKey(), 
-            request.getValue(), 
-            request.getType(), 
+            request.getPetId(),
+            request.getKey(),
+            request.getValue(),
+            request.getType(),
+            request.getLevel(),
             request.getImportance()
         );
         return Result.success(null);
@@ -101,7 +99,7 @@ public class MemoryController {
     @Data
     public static class UpdateMemoryRequest {
         private String value;
-        private Integer importance;
+        private BigDecimal importance;
     }
 
     @Data
@@ -110,6 +108,7 @@ public class MemoryController {
         private String key;
         private String value;
         private String type;
-        private Integer importance;
+        private String level;
+        private BigDecimal importance;
     }
 }

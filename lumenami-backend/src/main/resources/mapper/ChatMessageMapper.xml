@@ -10,6 +10,7 @@
         <result property="role" column="role"/>
         <result property="content" column="content"/>
         <result property="tokenCount" column="token_count"/>
+        <result property="embedding" column="embedding"/>
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
@@ -21,6 +22,19 @@
     <select id="findByPetId" resultMap="ChatMessageResult">
         SELECT * FROM chat_messages WHERE pet_id = #{petId} ORDER BY created_at ASC
     </select>
+
+    <select id="findRecentByPetId" resultMap="ChatMessageResult">
+        SELECT * FROM chat_messages
+        WHERE pet_id = #{petId}
+        ORDER BY created_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <update id="updateEmbedding">
+        UPDATE chat_messages
+        SET embedding = #{embedding}
+        WHERE id = #{id}
+    </update>
 
     <delete id="deleteByPetId">
         DELETE FROM chat_messages WHERE pet_id = #{petId}
