@@ -2,6 +2,7 @@ package com.lumenami.backend.service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Qwen AI 服务接口
@@ -15,6 +16,14 @@ public interface QwenService {
      * @return AI 回复内容
      */
     String chat(String systemPrompt, List<Map<String, String>> history);
+
+    /**
+     * 流式调用 Qwen API 进行对话
+     * @param systemPrompt 宠物的性格设定
+     * @param history 对话历史
+     * @param onToken 每收到一个 token 时的回调
+     */
+    void chatStream(String systemPrompt, List<Map<String, String>> history, Consumer<String> onToken);
 
     /**
      * 调用 Qwen Embedding API 生成文本向量

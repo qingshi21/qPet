@@ -11,10 +11,14 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Qwen AI 服务实现类
@@ -41,6 +45,8 @@ public class QwenServiceImpl implements QwenService {
 
     // 配置带超时的 RestTemplate（连接超时 5s，读取超时 30s）
     private final RestTemplate restTemplate;
+    // 流式调用专用 RestTemplate（读取超时更长，避免流中断）
+    private final RestTemplate streamRestTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public QwenServiceImpl() {
@@ -50,10 +56,24 @@ public class QwenServiceImpl implements QwenService {
             setConnectTimeout(5000);  // 连接超时 5 秒
             setReadTimeout(30000);     // 读取超时 30 秒
         }});
+
+        // 流式专用：读取超时 120 秒（流式场景下两个 token 之间可能间隔较长）
+        this.streamRestTemplate = new RestTemplate();
+        this.streamRestTemplate.setRequestFactory(new org.springframework.http.client.SimpleClientHttpRequestFactory() {{
+            setConnectTimeout(5000);
+            setReadTimeout(120000);
+        }});
     }
 
     @Override
     public String chat(String systemPrompt, List<Map<String, String>> history) {
+        StringBuilder fullReply = new StringBuilder();
+        chatStream(systemPrompt, history, fullReply::append);
+        return fullReply.toString();
+    }
+
+    @Override
+    public void chatStream(String systemPrompt, List<Map<String, String>> history, Consumer<String> onToken) {
         try {
             // 构建请求体
             Map<String, Object> requestBody = new HashMap<>();
@@ -76,40 +96,56 @@ public class QwenServiceImpl implements QwenService {
             }
 
             requestBody.put("messages", messages);
+            requestBody.put("stream", true);
 
             // 设置请求头
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(apiKey);
 
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-            // 发送请求
-            log.debug("Calling Qwen API with messages: {}", messages);
-            ResponseEntity<String> response = restTemplate.exchange(
+            // 流式请求：使用 execute + ResponseExtractor 逐行读取 SSE
+            log.debug("Calling Qwen API (stream) with messages: {}", messages);
+            streamRestTemplate.execute(
                     apiUrl,
-                    HttpMethod.POST,
-                    entity,
-                    String.class
+                    org.springframework.http.HttpMethod.POST,
+                    request -> {
+                        // 写入请求体
+                        headers.forEach((key, values) -> values.forEach(v -> request.getHeaders().add(key, v)));
+                        byte[] body = objectMapper.writeValueAsBytes(requestBody);
+                        request.getHeaders().setContentLength(body.length);
+                        request.getBody().write(body);
+                    },
+                    response -> {
+                        try (BufferedReader reader = new BufferedReader(
+                                new InputStreamReader(response.getBody(), StandardCharsets.UTF_8))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                if (!line.startsWith("data: ")) continue;
+                                String data = line.substring(6).trim();
+                                if ("[DONE]".equals(data)) break;
+
+                                try {
+                                    JsonNode node = objectMapper.readTree(data);
+                                    JsonNode delta = node.path("choices").path(0).path("delta");
+                                    if (delta.has("content")) {
+                                        String content = delta.get("content").asText();
+                                        if (!content.isEmpty()) {
+                                            onToken.accept(content);
+                                        }
+                                    }
+                                } catch (Exception parseEx) {
+                                    log.warn("解析流式 chunk 失败: {}", data, parseEx);
+                                }
+                            }
+                        }
+                        return null;
+                    }
             );
-
-            // 解析响应
-            JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode choices = root.get("choices");
-            if (choices != null && choices.isArray() && choices.size() > 0) {
-                JsonNode message = choices.get(0).get("message");
-                if (message != null && message.has("content")) {
-                    return message.get("content").asText();
-                }
-            }
-
-            log.error("Unexpected Qwen API response: {}", response.getBody());
-            throw new BusinessException(500, "AI 响应格式异常");
 
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Failed to call Qwen API", e);
+            log.error("Failed to call Qwen API (stream)", e);
             throw new BusinessException(500, "调用 AI 服务失败: " + e.getMessage());
         }
     }

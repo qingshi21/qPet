@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -41,6 +42,15 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public ChatResponse chat(Integer userId, ChatRequest request) {
+        StringBuilder fullReply = new StringBuilder();
+        chatStream(userId, request, fullReply::append);
+        ChatResponse response = new ChatResponse();
+        response.setReply(fullReply.toString());
+        return response;
+    }
+
+    @Override
+    public void chatStream(Integer userId, ChatRequest request, Consumer<String> onToken) {
         log.info("聊天请求: userId={}, petId={}, message={}", userId, request.getPetId(),
                 request.getMessage().length() > 50 ? request.getMessage().substring(0, 50) + "..." : request.getMessage());
 
@@ -117,10 +127,15 @@ public class ChatServiceImpl implements ChatService {
         // ①②③④⑤⑥⑦ 构建增强的 system prompt
         String systemPrompt = buildLayeredSystemPrompt(pet, permanentMemories, timelinessStatusMemories, l2Memories, fallbackMessages);
 
-        // 调用 Qwen API
-        log.debug("调用 Qwen API: petId={}", pet.getId());
-        String reply = qwenService.chat(systemPrompt, messages);
-        log.debug("Qwen API 响应: petId={}, replyLength={}", pet.getId(), reply.length());
+        // 调用 Qwen API（流式）
+        log.debug("调用 Qwen API (stream): petId={}", pet.getId());
+        StringBuilder replyBuilder = new StringBuilder();
+        qwenService.chatStream(systemPrompt, messages, token -> {
+            replyBuilder.append(token);
+            onToken.accept(token);
+        });
+        String reply = replyBuilder.toString();
+        log.debug("Qwen API 流式响应完成: petId={}, replyLength={}", pet.getId(), reply.length());
 
         // 保存 AI 回复到数据库
         ChatMessage aiMsg = new ChatMessage();
@@ -137,12 +152,7 @@ public class ChatServiceImpl implements ChatService {
         // 异步触发记忆提炼（Record 链路）
         chatAsyncService.extractAndSaveMemoriesAsync(pet.getId(), request.getMessage(), reply);
 
-        // 构建响应
-        ChatResponse response = new ChatResponse();
-        response.setReply(reply);
-
-        log.info("聊天响应完成: userId={}, petId={}, replyLength={}", userId, pet.getId(), reply.length());
-        return response;
+        log.info("聊天响应完成 (stream): userId={}, petId={}, replyLength={}", userId, pet.getId(), reply.length());
     }
 
     /**

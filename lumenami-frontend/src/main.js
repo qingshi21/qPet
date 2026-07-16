@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, screen } = require('electron');
 const path = require('path');
 
 // ========== 启动器窗口 ==========
@@ -67,6 +67,7 @@ function createFloating() {
     
     floatingWindow.on('closed', () => {
         floatingWindow = null;
+        stopMouseTracking();  // 关闭悬浮窗时停止追踪
     });
 
     return floatingWindow;
@@ -134,6 +135,7 @@ ipcMain.on('minimize-launcher', () => {
 
 ipcMain.on('open-floating', () => {
     createFloating();
+    startMouseTracking();  // 开启全局鼠标追踪
 });
 
 ipcMain.on('open-launcher', () => {
@@ -159,6 +161,43 @@ ipcMain.on('minimize-chat', () => {
         chatWindow.minimize();
     }
 });
+
+// ========== 口型同步：聊天窗口 → 悬浮窗 ==========
+ipcMain.on('lip-sync-start', (event, { duration }) => {
+    if (floatingWindow && !floatingWindow.isDestroyed()) {
+        floatingWindow.webContents.send('lip-sync-start', { duration });
+    }
+});
+
+ipcMain.on('lip-sync-stop', () => {
+    if (floatingWindow && !floatingWindow.isDestroyed()) {
+        floatingWindow.webContents.send('lip-sync-stop');
+    }
+});
+
+// ========== 全局鼠标位置追踪（悬浮窗窗口外跟随） ==========
+let mouseTrackInterval = null;
+
+function startMouseTracking() {
+    if (mouseTrackInterval) return;
+    // 每 50ms 轮询一次全局鼠标位置（约 20fps，足够头部跟随）
+    mouseTrackInterval = setInterval(() => {
+        if (!floatingWindow || floatingWindow.isDestroyed()) return;
+        const { x, y } = screen.getCursorScreenPoint();
+        const bounds = floatingWindow.getBounds();
+        // 转换为悬浮窗本地坐标（可以是负数或超出窗口范围）
+        const localX = x - bounds.x;
+        const localY = y - bounds.y;
+        floatingWindow.webContents.send('global-mouse-move', { localX, localY, winW: bounds.width, winH: bounds.height });
+    }, 50);
+}
+
+function stopMouseTracking() {
+    if (mouseTrackInterval) {
+        clearInterval(mouseTrackInterval);
+        mouseTrackInterval = null;
+    }
+}
 
 // ========== 悬浮窗动态调整大小（模型缩放驱动） ==========
 ipcMain.on('resize-floating', (event, { width, height }) => {

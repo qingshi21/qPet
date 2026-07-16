@@ -335,6 +335,19 @@ body::after {
     backdrop-filter: blur(8px);
 }
 
+/* 流式输出中的气泡：末尾闪烁光标 */
+.streaming-bubble::after {
+    content: '▍';
+    display: inline;
+    color: rgba(167, 136, 216, 0.7);
+    animation: cursorBlink 0.8s ease-in-out infinite;
+}
+
+@keyframes cursorBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
 .message.user .bubble {
     background: linear-gradient(135deg, rgba(232, 180, 104, 0.85), rgba(217, 160, 80, 0.85));
     color: #17181E;

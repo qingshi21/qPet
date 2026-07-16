@@ -94,6 +94,29 @@ public class WebSocketMessage {
     }
 
     /**
+     * 创建流式输出 chunk 消息
+     */
+    public static WebSocketMessage streamChunk(Integer petId, String chunk) {
+        WebSocketMessage msg = new WebSocketMessage();
+        msg.setType("stream_chunk");
+        msg.setPetId(petId);
+        msg.setReply(chunk);
+        msg.setTimestamp(System.currentTimeMillis());
+        return msg;
+    }
+
+    /**
+     * 创建流式输出结束消息
+     */
+    public static WebSocketMessage streamEnd(Integer petId) {
+        WebSocketMessage msg = new WebSocketMessage();
+        msg.setType("stream_end");
+        msg.setPetId(petId);
+        msg.setTimestamp(System.currentTimeMillis());
+        return msg;
+    }
+
+    /**
      * 创建正在输入消息
      */
     public static WebSocketMessage typing(Integer petId) {

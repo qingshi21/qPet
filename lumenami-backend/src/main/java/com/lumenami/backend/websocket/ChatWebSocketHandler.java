@@ -3,7 +3,6 @@ package com.lumenami.backend.websocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lumenami.backend.config.JwtUtil;
 import com.lumenami.backend.dto.ChatRequest;
-import com.lumenami.backend.dto.ChatResponse;
 import com.lumenami.backend.service.ChatService;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +14,7 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -127,7 +127,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * 处理聊天消息
+     * 处理聊天消息（流式输出）
      */
     private void handleChatMessage(WebSocketSession session, WebSocketMessage wsMessage) throws Exception {
         Integer userId = sessionUserMap.get(session.getId());
@@ -148,23 +148,44 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         WebSocketMessage typingMsg = WebSocketMessage.typing(petId);
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(typingMsg)));
 
-        // 调用 ChatService 处理聊天
+        // 构建聊天请求
         ChatRequest chatRequest = new ChatRequest();
         chatRequest.setPetId(petId);
         chatRequest.setMessage(userMessage);
 
-        try {
-            ChatResponse chatResponse = chatService.chat(userId, chatRequest);
+        // 异步执行流式聊天，避免阻塞 WebSocket 线程
+        CompletableFuture.runAsync(() -> {
+            try {
+                chatService.chatStream(userId, chatRequest, token -> {
+                    // 每收到一个 token，发送 stream_chunk 给前端
+                    try {
+                        synchronized (session) {
+                            WebSocketMessage chunkMsg = WebSocketMessage.streamChunk(petId, token);
+                            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(chunkMsg)));
+                        }
+                    } catch (Exception e) {
+                        log.warn("发送 stream_chunk 失败: {}", e.getMessage());
+                    }
+                });
 
-            // 发送 AI 回复
-            WebSocketMessage replyMsg = WebSocketMessage.chatReply(petId, chatResponse.getReply());
-            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(replyMsg)));
+                // 流结束，发送 stream_end
+                synchronized (session) {
+                    WebSocketMessage endMsg = WebSocketMessage.streamEnd(petId);
+                    session.sendMessage(new TextMessage(objectMapper.writeValueAsString(endMsg)));
+                }
+                log.info("流式回复完成: userId={}, petId={}", userId, petId);
 
-            log.info("聊天回复已发送: userId={}, petId={}", userId, petId);
-        } catch (Exception e) {
-            log.error("聊天处理失败: userId={}, petId={}", userId, petId, e);
-            sendError(session, "聊天处理失败: " + e.getMessage());
-        }
+            } catch (Exception e) {
+                log.error("流式聊天失败: userId={}, petId={}", userId, petId, e);
+                try {
+                    synchronized (session) {
+                        sendError(session, "聊天处理失败: " + e.getMessage());
+                    }
+                } catch (Exception ex) {
+                    log.warn("发送错误消息失败: {}", ex.getMessage());
+                }
+            }
+        });
     }
 
     /**

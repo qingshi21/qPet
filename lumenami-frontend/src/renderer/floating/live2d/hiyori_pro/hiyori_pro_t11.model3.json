@@ -53,6 +53,11 @@
 				{
 					"File": "motion/hiyori_m10.motion3.json"
 				}
+			],
+			"Happy": [
+				{
+					"File": "motion/hiyori_happy.motion3.json"
+				}
 			]
 		}
 	},

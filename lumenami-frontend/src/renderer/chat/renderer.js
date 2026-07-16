@@ -37,6 +37,12 @@ let isWaitingResponse = false;
 let editingMemoryId = null; // 当前正在编辑的记忆ID
 let lastMessageDate = null; // 用于日期分组
 
+// ===== 流式输出状态 =====
+let streamingBubble = null;   // 当前流式输出的气泡元素
+let streamingText = '';        // 累积的流式文本
+let streamingStartTime = 0;   // 流式输出开始时间
+let streamScrollLocked = false; // 流式输出滚动是否已锁定
+
 // ===== Toast 通知 =====
 function showToast(message, type = 'error') {
     let toast = document.getElementById('toast');
@@ -135,6 +141,13 @@ function connectWebSocket() {
         // 重置等待状态，防止 typing 指示器卡住
         if (isWaitingResponse) {
             removeTypingIndicator();
+            // 如果有未完成的流式输出，_finalize_它
+            if (streamingBubble && streamingText) {
+                streamingBubble.classList.remove('streaming-bubble');
+                conversationHistory.push({ role: 'assistant', content: streamingText });
+                streamingBubble = null;
+                streamingText = '';
+            }
             appendMessage('ai', '网络连接已断开，请等待重连后重试');
             isWaitingResponse = false;
             sendBtn.disabled = !messageInput.value.trim();
@@ -165,12 +178,21 @@ function handleWebSocketMessage(message) {
             showTypingIndicator();
             break;
         
+        case 'stream_chunk':
+            handleStreamChunk(message);
+            break;
+        
+        case 'stream_end':
+            handleStreamEnd(message);
+            break;
+        
         case 'chat_reply':
-            // 移除打字指示器并显示 AI 回复
+            // 兼容旧版非流式回复
             removeTypingIndicator();
             if (message.reply) {
                 appendMessage('ai', message.reply, true, message.timestamp);
                 conversationHistory.push({ role: 'assistant', content: message.reply });
+                triggerLipSync(message.reply);
             }
             isWaitingResponse = false;
             sendBtn.disabled = !messageInput.value.trim();
@@ -194,6 +216,91 @@ function handleWebSocketMessage(message) {
     }
 }
 
+// ===== 流式输出处理 =====
+function handleStreamChunk(message) {
+    const chunk = message.reply || '';
+    if (!chunk) return;
+
+    // 首个 chunk：移除 typing 指示器，创建气泡
+    if (!streamingBubble) {
+        removeTypingIndicator();
+        streamingText = '';
+        streamingStartTime = Date.now();
+
+        // 创建 AI 消息气泡
+        const msgDate = message.timestamp ? new Date(message.timestamp) : new Date();
+        const dateStr = formatDate(msgDate);
+        if (lastMessageDate !== dateStr) {
+            insertDateSeparator(dateStr);
+            lastMessageDate = dateStr;
+        }
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message ai';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.textContent = currentPet ? getPetEmoji(currentPet.petId) : '🐱';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble streaming-bubble';
+
+        const timeEl = document.createElement('div');
+        timeEl.className = 'message-time';
+        timeEl.textContent = formatTime(msgDate);
+
+        msgDiv.appendChild(avatar);
+        const bubbleWrapper = document.createElement('div');
+        bubbleWrapper.className = 'bubble-wrapper';
+        bubbleWrapper.appendChild(bubble);
+        bubbleWrapper.appendChild(timeEl);
+        msgDiv.appendChild(bubbleWrapper);
+        chatArea.appendChild(msgDiv);
+
+        streamingBubble = bubble;
+        streamScrollLocked = false;
+
+        // 触发口型动画（初始预估 5 秒，stream_end 时会停止）
+        triggerLipSync(5000);
+    }
+
+    // 追加文本
+    streamingText += chunk;
+    streamingBubble.textContent = streamingText;
+    if (!streamScrollLocked) {
+        scrollToBottom();
+    }
+    smartScrollDuringStreaming();
+}
+
+function handleStreamEnd(message) {
+    if (!streamingBubble) return;
+
+    // 完成流式输出
+    streamingBubble.classList.remove('streaming-bubble');
+    const finalText = streamingText;
+
+    // 更新对话历史
+    conversationHistory.push({ role: 'assistant', content: finalText });
+
+    // 根据实际文本长度重新触发口型（如果还在进行中）
+    const elapsed = Date.now() - streamingStartTime;
+    const estimatedDuration = Math.min(15000, Math.max(1000, finalText.length * 80));
+    if (elapsed < estimatedDuration) {
+        // 重新按实际时长触发，减去已流逝的时间
+        triggerLipSync(estimatedDuration - elapsed);
+    }
+
+    // 重置流式状态
+    streamingBubble = null;
+    streamingText = '';
+    isWaitingResponse = false;
+    sendBtn.disabled = !messageInput.value.trim();
+
+    // 流式结束后滚动到底部，确保完整内容可见
+    scrollToBottom();
+}
+
 // 发送 WebSocket 消息
 function sendWebSocketMessage(type, data) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -204,6 +311,14 @@ function sendWebSocketMessage(type, data) {
     const message = { type, ...data, timestamp: Date.now() };
     ws.send(JSON.stringify(message));
     return true;
+}
+
+// ===== 触发悬浮窗口型动画 =====
+function triggerLipSync(text) {
+    if (!text) return;
+    // 按文本长度计算持续时间：每个字符约 80ms，最短 1s，最长 15s
+    const duration = Math.min(15000, Math.max(1000, text.length * 80));
+    ipcRenderer.send('lip-sync-start', { duration });
 }
 
 // 开始心跳
@@ -501,6 +616,36 @@ function removeTypingIndicator() {
     // 移除所有 typing 指示器（防止重复创建导致残留）
     const indicators = chatArea.querySelectorAll('#typingIndicator');
     indicators.forEach(el => el.remove());
+}
+
+/**
+ * 流式输出智能滚动：
+ * - 前 3 行自动滚动到底部
+ * - 超过 3 行后锁定滚动，内容在下方增长
+ * 使用 rAF 确保浏览器渲染后再测量
+ */
+const AUTO_SCROLL_LINES = 3;
+
+function smartScrollDuringStreaming() {
+    if (!streamingBubble || streamScrollLocked) return;
+
+    // 用 rAF 确保浏览器已完成布局
+    requestAnimationFrame(() => {
+        if (!streamingBubble || streamScrollLocked) return;
+
+        const style = getComputedStyle(streamingBubble);
+        const lineHeight = parseFloat(style.lineHeight) || 22.4;
+        const paddingTop = parseFloat(style.paddingTop) || 0;
+        const paddingBottom = parseFloat(style.paddingBottom) || 0;
+
+        // 纯文本高度 = scrollHeight - 上下 padding
+        const textHeight = streamingBubble.scrollHeight - paddingTop - paddingBottom;
+        const lines = Math.round(textHeight / lineHeight);
+
+        if (lines > AUTO_SCROLL_LINES) {
+            streamScrollLocked = true;
+        }
+    });
 }
 
 function scrollToBottom() {
