@@ -15,6 +15,20 @@ let currentPet = null;
 let live2dModel = null;
 let app = null;
 
+// ===== 缩放控制 =====
+let scaleFactor = 1.0;       // 用户缩放倍率（滚轮控制）
+const SCALE_MIN = 0.3;
+const SCALE_MAX = 3.0;
+const SCALE_STEP = 0.05;     // 每次滚轮步进（改小更丝滑）
+const MODEL_PADDING = 20;    // 模型与窗口边缘间距(px)
+let baseScale = 1;           // 模型加载时的基础缩放
+let modelOriginalWidth = 0;  // 模型原始宽度（未缩放）
+let modelOriginalHeight = 0; // 模型原始高度（未缩放）
+
+// ===== 防抖/节流控制 =====
+let resizeDebounceTimer = null;  // 窗口resize防抖定时器
+const RESIZE_DEBOUNCE_DELAY = 25; // 延迟ms，连续滚轮时只执行最后一次
+
 // ===== 获取当前激活的宠物信息 =====
 async function fetchActivePet() {
     try {
@@ -102,24 +116,28 @@ async function initLive2D() {
         }
 
         // 创建 PixiJS 应用
+        const dpr = window.devicePixelRatio || 1;
         app = new Application({
             view: canvas,
             transparent: true,
             width: window.innerWidth,
             height: window.innerHeight,
             backgroundAlpha: 0,
-            resolution: window.devicePixelRatio || 1,
-            autoStart: false,  // 手动控制渲染循环
-            eventMode: 'none',  // 禁用事件系统，避免 isInteractive 错误
+            resolution: dpr,      // 匹配屏幕物理像素比，保证清晰
+            autoStart: false,
+            eventMode: 'none',
         });
 
         // 注册 Ticker 给 Live2DModel
         Live2DModel.registerTicker(Ticker);
 
-        // 窗口大小变化时自适应
+        // 窗口大小变化时同步渲染器（仅更新渲染尺寸，不重新定位模型）
         window.addEventListener('resize', () => {
             if (app && app.renderer) {
                 app.renderer.resize(window.innerWidth, window.innerHeight);
+                // 同步 canvas CSS 显示尺寸
+                canvas.style.width = window.innerWidth + 'px';
+                canvas.style.height = window.innerHeight + 'px';
             }
         });
 
@@ -130,20 +148,42 @@ async function initLive2D() {
         });
 
         // 调整模型位置和大小（居中显示）
-        live2dModel.anchor.set(0.5, 0.5);  // 设置锚点为中心
-        live2dModel.position.set(window.innerWidth / 2, window.innerHeight / 2);
-        
-        // 根据模型原始尺寸计算合适的缩放比例
-        const modelWidth = live2dModel.width;
-        const modelHeight = live2dModel.height;
-        const scaleX = (window.innerWidth * 0.8) / modelWidth;  // 占窗口宽度的 80%
-        const scaleY = (window.innerHeight * 0.8) / modelHeight;  // 占窗口高度的 80%
-        const scale = Math.min(scaleX, scaleY);  // 取较小的缩放比例保持比例
-        live2dModel.scale.set(scale);
+        live2dModel.anchor.set(0.5, 0.5);
+
+        // 保存模型原始尺寸（缩放前的 width/height）
+        modelOriginalWidth = live2dModel.width;
+        modelOriginalHeight = live2dModel.height;
+
+        // 计算基础缩放：让模型适配当前窗口
+        baseScale = Math.min(
+            (window.innerWidth * 0.8) / modelOriginalWidth,
+            (window.innerHeight * 0.8) / modelOriginalHeight
+        );
+        live2dModel.scale.set(baseScale * scaleFactor);
         app.stage.addChild(live2dModel);
 
         // 启动渲染循环
         app.start();
+
+        // 模型加载后，立即让窗口匹配模型实际渲染大小
+        updateWindowSize();
+
+        // ===== 滚轮缩放：改模型 scale → 算像素尺寸 → 窗口跟着变（防抖） =====
+        document.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP;
+            const newScale = Math.max(SCALE_MIN, Math.min(SCALE_MAX, scaleFactor + delta));
+            if (newScale !== scaleFactor) {
+                scaleFactor = newScale;
+                // 立即更新模型scale（视觉反馈快）
+                live2dModel.scale.set(baseScale * scaleFactor);
+                // 窗口resize防抖执行
+                updateWindowSize();
+            }
+        }, { passive: false });
+
+        // 强制设置 canvas 光标样式（PixiJS 可能会覆盖）
+        canvas.style.cursor = 'pointer';
 
         // 自动更新物理和表情
         live2dModel.autoUpdate = true;
@@ -154,9 +194,38 @@ async function initLive2D() {
     }
 }
 
-// ===== 启动 =====
-// 1. 获取宠物信息
-fetchActivePet();
+// ===== 窗口尺寸同步：模型实际渲染大小 → 窗口大小（带防抖） =====
+function updateWindowSize() {
+    if (!live2dModel || !app) return;
 
-// 2. 初始化 Live2D
+    const canvas = document.getElementById('live2d-canvas');
+
+    // 用原始尺寸 × 当前总缩放，得到实际渲染像素（逻辑像素）
+    const totalScale = baseScale * scaleFactor;
+    const renderedW = Math.ceil(modelOriginalWidth * totalScale);
+    const renderedH = Math.ceil(modelOriginalHeight * totalScale);
+    const newWidth = renderedW + MODEL_PADDING * 2;
+    const newHeight = renderedH + MODEL_PADDING * 2;
+
+    // 立即更新 PixiJS 渲染器和 canvas CSS（模型视觉立即变化，不卡）
+    app.renderer.resize(newWidth, newHeight);
+    canvas.style.width = newWidth + 'px';
+    canvas.style.height = newHeight + 'px';
+    live2dModel.position.set(newWidth / 2, newHeight / 2);
+
+    console.log(`[scale] original: ${modelOriginalWidth}x${modelOriginalHeight}, scale: ${totalScale.toFixed(2)}, rendered: ${renderedW}x${renderedH}`);
+
+    // 窗口resize防抖：连续滚轮时只执行最后一次，避免频繁调用Electron API导致卡顿
+    if (resizeDebounceTimer) {
+        clearTimeout(resizeDebounceTimer);
+    }
+    resizeDebounceTimer = setTimeout(() => {
+        console.log(`[window resize] ${newWidth}x${newHeight}`);
+        ipcRenderer.send('resize-floating', { width: newWidth, height: newHeight });
+        resizeDebounceTimer = null;
+    }, RESIZE_DEBOUNCE_DELAY);
+}
+
+// ===== 启动 =====
+fetchActivePet();
 initLive2D();

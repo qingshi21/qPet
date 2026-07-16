@@ -94,6 +94,7 @@ loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
+    const rememberMe = document.getElementById('rememberMeCheckbox').checked;
 
     if (!username || !password) {
         showMessage('loginError', '请填写完整信息');
@@ -106,7 +107,7 @@ loginForm.addEventListener('submit', async (e) => {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password, rememberMe })
         });
 
         const result = await response.json();
@@ -116,6 +117,7 @@ loginForm.addEventListener('submit', async (e) => {
             localStorage.setItem('userId', currentUserId);
             localStorage.setItem('username', result.data.username);
             localStorage.setItem('token', result.data.token);
+            localStorage.setItem('rememberMe', rememberMe ? 'true' : 'false');
 
             showMessage('loginError', '✅ 登录成功！', true);
             // 延迟一点切换到宠物列表
@@ -740,3 +742,43 @@ if (createPetForm) {
         }
     });
 }
+
+// ===== 启动时自动检测登录状态（7天免密） =====
+(async function checkAutoLogin() {
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    const rememberMe = localStorage.getItem('rememberMe');
+    
+    // 如果没有 token 或者没有勾选记住我，直接返回（显示登录页面）
+    if (!token || !userId || rememberMe !== 'true') {
+        return;
+    }
+    
+    try {
+        // 验证 token 是否仍然有效（调用一个需要认证的接口）
+        const response = await fetch('http://localhost:8080/api/pets', {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+            }
+        });
+        
+        if (response.status === 200) {
+            // token 有效，自动登录
+            currentUserId = parseInt(userId);
+            showMessage('loginError', '✅ 自动登录成功', true);
+            setTimeout(() => {
+                showPetList();
+            }, 300);
+        } else if (response.status === 401) {
+            // token 过期或无效，清除本地存储
+            localStorage.removeItem('userId');
+            localStorage.removeItem('username');
+            localStorage.removeItem('token');
+            localStorage.removeItem('rememberMe');
+        }
+    } catch (err) {
+        // 网络错误，不做自动登录
+        console.debug('自动登录检测失败:', err);
+    }
+})();

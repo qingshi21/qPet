@@ -28,14 +28,22 @@ public class JwtUtil {
     }
 
     /**
-     * 生成 JWT token
+     * 生成 JWT token（默认过期时间，从配置文件读取）
      */
     public String generateToken(Integer userId, String username) {
+        return generateToken(userId, username, expiration);
+    }
+    
+    /**
+     * 生成 JWT token（自定义过期时间）
+     * @param customExpiration 过期时间（毫秒）
+     */
+    public String generateToken(Integer userId, String username, long customExpiration) {
         return Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim("username", username)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + expiration))
+                .expiration(new Date(System.currentTimeMillis() + customExpiration))
                 .signWith(getSigningKey())
                 .compact();
     }

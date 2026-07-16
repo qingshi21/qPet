@@ -10,6 +10,7 @@ import com.lumenami.backend.model.User;
 import com.lumenami.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,9 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final JwtUtil jwtUtil;
     private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+    @Value("${jwt.remember-me-expiration:604800000}")
+    private long rememberMeExpiration; // 7天免密过期时间（毫秒）
 
     @Override
     public void register(RegisterRequest request) {
@@ -82,8 +86,17 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(401, "用户名或密码错误");
         }
 
-        // 生成 JWT token
-        String token = jwtUtil.generateToken(user.getId(), user.getUsername());
+        // 生成 JWT token（根据是否记住我选择不同的过期时间）
+        boolean rememberMe = request.getRememberMe() != null && request.getRememberMe();
+        long tokenExpiration = rememberMe ? rememberMeExpiration : 0; // 0 表示使用默认值
+        String token;
+        if (rememberMe) {
+            token = jwtUtil.generateToken(user.getId(), user.getUsername(), rememberMeExpiration);
+            log.info("生成7天免密token: userId={}", user.getId());
+        } else {
+            token = jwtUtil.generateToken(user.getId(), user.getUsername());
+            log.info("生成普通token(24h): userId={}", user.getId());
+        }
 
         LoginResponse resp = new LoginResponse();
         resp.setUserId(user.getId());

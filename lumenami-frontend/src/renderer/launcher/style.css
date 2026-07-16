@@ -299,6 +299,33 @@ body::after {
     box-shadow: 0 0 15px rgba(232, 180, 104, 0.08), 0 0 30px rgba(232, 180, 104, 0.04);
 }
 
+/* 记住我复选框 */
+.remember-me {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #8A8694;
+    user-select: none;
+    -webkit-app-region: no-drag;
+    margin-top: -8px;
+}
+
+.remember-me input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #E8B468;
+    cursor: pointer;
+    padding: 0;
+    border-radius: 4px;
+}
+
+.remember-me span {
+    color: #8A8694;
+    font-weight: 400;
+}
+
 .auth-panel button {
     padding: 12px;
     border: none;

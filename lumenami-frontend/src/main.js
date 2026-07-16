@@ -50,12 +50,12 @@ function createFloating() {
     }
 
     floatingWindow = new BrowserWindow({
-        width: 200,
-        height: 200,
+        width: 400,
+        height: 400,
         frame: false,
         transparent: true,
         alwaysOnTop: true,
-        resizable: false,
+        resizable: true,   // 必须 true，否则 setBounds 在某些 Electron 版本下不生效
         skipTaskbar: true,
         webPreferences: {
             nodeIntegration: true,
@@ -64,7 +64,6 @@ function createFloating() {
     });
 
     floatingWindow.loadFile('./src/renderer/floating/index.html');
-    floatingWindow.webContents.openDevTools({ mode: 'detach' });
     
     floatingWindow.on('closed', () => {
         floatingWindow = null;
@@ -111,10 +110,7 @@ function createChatWindow(petInfo) {
     });
 
     chatWindow.on('closed', () => {
-        // 防止旧窗口的 closed 事件清空新窗口引用（竞态保护）
-        if (chatWindow === this) {
-            chatWindow = null;
-        }
+        chatWindow = null;
     });
 
     return chatWindow;
@@ -124,7 +120,7 @@ function createChatWindow(petInfo) {
 const { ipcMain } = require('electron');
 
 ipcMain.on('close-launcher', () => {
-    if (launcherWindow) {
+    if (launcherWindow && !launcherWindow.isDestroyed()) {
         launcherWindow.close();
         launcherWindow = null;
     }
@@ -142,12 +138,12 @@ ipcMain.on('open-floating', () => {
 
 ipcMain.on('open-launcher', () => {
     // 关闭悬浮窗，重新打开启动器并自动显示宠物列表
-    if (floatingWindow) {
+    if (floatingWindow && !floatingWindow.isDestroyed()) {
         floatingWindow.close();
         floatingWindow = null;
     }
     // 同时关闭聊天窗口，防止旧 WebSocket 连接残留
-    if (chatWindow) {
+    if (chatWindow && !chatWindow.isDestroyed()) {
         chatWindow.close();
         chatWindow = null;
     }
@@ -162,6 +158,19 @@ ipcMain.on('minimize-chat', () => {
     if (chatWindow) {
         chatWindow.minimize();
     }
+});
+
+// ========== 悬浮窗动态调整大小（模型缩放驱动） ==========
+ipcMain.on('resize-floating', (event, { width, height }) => {
+    if (!floatingWindow || floatingWindow.isDestroyed()) return;
+    const w = Math.max(100, Math.round(width));
+    const h = Math.max(100, Math.round(height));
+    // 先 setSize，再 setPosition 保持居中
+    floatingWindow.setSize(w, h);
+    const bounds = floatingWindow.getBounds();
+    const newX = Math.max(0, Math.round(bounds.x - (w - bounds.width) / 2));
+    const newY = Math.max(0, Math.round(bounds.y - (h - bounds.height) / 2));
+    floatingWindow.setPosition(newX, newY);
 });
 
 // ========== 应用生命周期 ==========
